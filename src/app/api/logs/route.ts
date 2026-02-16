@@ -52,7 +52,9 @@ export async function POST(req: Request) {
 
   const project = projects?.find((p) => p.code === parsed.projectCode);
 
-  let { source, content: bodyContent, task_id_tag: parsedTag } = parseLogContent(parsed.content);
+  const parsedContent = parseLogContent(parsed.content);
+  const { source, content: bodyContent } = parsedContent;
+  let parsedTag = parsedContent.task_id_tag;
   if (parsedTag == null && rawInput?.trim()) {
     const fromRaw = parseLogContent(rawInput.trim());
     if (fromRaw.task_id_tag) parsedTag = fromRaw.task_id_tag;

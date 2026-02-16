@@ -45,7 +45,6 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId');
-  const status = searchParams.get('status');
 
   // 할일 = (1) task_id_tag/task_state 있는 로그, (2) no_task_needed=false인 로그(AI가 할일로 분류)
   let query = supabase
@@ -110,7 +109,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { project_id, task_id_tag, description, priority, due_date } = body;
+  const { project_id, task_id_tag, description, priority } = body;
 
   if (!project_id || !description) {
     return NextResponse.json({ error: 'project_id, description required' }, { status: 400 });
