@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     .lte('log_date', targetDate)
     .order('log_date', { ascending: false })
     .limit(2000);
-  const recentDates = [...new Set((dateRows ?? []).map((r) => r.log_date))].slice(0, 5);
+  const recentDates = Array.from(new Set((dateRows ?? []).map((r) => r.log_date))).slice(0, 5);
   if (recentDates.length === 0) {
     return NextResponse.json({ classified: 0, message: '대상 로그가 없습니다.' });
   }
@@ -53,13 +53,17 @@ export async function POST(req: Request) {
   let result;
   try {
     result = await classifyLogsAsTask({
-      logs: logsToClassify.map((l) => ({
-        id: l.id,
-        log_date: l.log_date,
-        log_type: l.log_type,
-        content: l.content ?? '',
-        project: (l as { project?: { name: string } | null }).project ?? null,
-      })),
+      logs: logsToClassify.map((l) => {
+        const p = (l as { project?: { name: string } | { name: string }[] | null }).project;
+        const project = Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
+        return {
+          id: l.id,
+          log_date: l.log_date,
+          log_type: l.log_type,
+          content: l.content ?? '',
+          project,
+        };
+      }),
     });
   } catch (e) {
     return NextResponse.json(

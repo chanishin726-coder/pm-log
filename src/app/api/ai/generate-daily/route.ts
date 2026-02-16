@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(500);
-  const recentDates = [...new Set((recentLogsRaw ?? []).map((l) => l.log_date))].slice(0, 5);
+  const recentDates = Array.from(new Set((recentLogsRaw ?? []).map((l) => l.log_date))).slice(0, 5);
   const recentLogs = (recentLogsRaw ?? [])
     .filter((l) => recentDates.includes(l.log_date))
     .sort((a, b) => (a.log_date !== b.log_date ? a.log_date.localeCompare(b.log_date) : (a.created_at ?? '').localeCompare(b.created_at ?? '')));
@@ -135,11 +135,18 @@ export async function POST(req: Request) {
     .eq('report_date', prevDateStr)
     .single();
 
+  const normalizeProject = <T extends { project?: unknown }>(arr: T[]): T[] =>
+    arr.map((l) => {
+      const p = l.project;
+      const project = Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
+      return { ...l, project } as T;
+    });
+
   let result: { logAssignments: Array<{ logId: string; taskIdTag: string | null }>; newTasks: Array<{ description: string; projectCode: string; priority: string; logIds: string[] }> };
   try {
     result = await generateDailyReport({
-      logs,
-      recentLogs: (recentLogs ?? []).filter((l) => l.log_date !== targetDate),
+      logs: normalizeProject(logs ?? []) as unknown as Parameters<typeof generateDailyReport>[0]['logs'],
+      recentLogs: normalizeProject((recentLogs ?? []).filter((l) => l.log_date !== targetDate)) as unknown as Parameters<typeof generateDailyReport>[0]['recentLogs'],
       tasks: tasks || [],
       previousReport: prevReport?.content,
       targetDate,
@@ -205,7 +212,7 @@ export async function POST(req: Request) {
     .eq('log_date', targetDate)
     .order('created_at', { ascending: true });
 
-  const section3Text = formatSection3Logs((logsForSection3 ?? []) as LogForSection3[]);
+  const section3Text = formatSection3Logs((logsForSection3 ?? []) as unknown as LogForSection3[]);
 
   const section12 = buildReportSection12((tasks || []) as TaskForSection1[]);
   const reportContentFinal = `${section12}\n\n3. 일지 및 소통 이력\n${section3Text}`;

@@ -66,11 +66,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const tasks = (logs ?? []).map(logToTaskShape).filter((t): t is Task => t != null);
+  type LogWithProject = Parameters<typeof logToTaskShape>[0];
+  const normalizeProject = (l: (typeof logs)[0]): LogWithProject['project'] => {
+    const p = (l as { project?: { id: string; name: string; code: string } | { id: string; name: string; code: string }[] | null }).project;
+    return Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
+  };
+  const normalizedLogs: LogWithProject[] = (logs ?? []).map((l) => ({ ...l, project: normalizeProject(l) } as LogWithProject));
+  const tasks = normalizedLogs.map(logToTaskShape).filter((t): t is Task => t != null);
 
   const withLogs = searchParams.get('withLogs') === 'true';
   if (withLogs && tasks.length > 0) {
-    const tags = [...new Set(tasks.map((t) => t.task_id_tag).filter(Boolean))];
+    const tags = Array.from(new Set(tasks.map((t) => t.task_id_tag).filter(Boolean)));
     const { data: relatedLogs } = await supabase
       .from('logs')
       .select('id, log_date, log_type, content, source, task_id_tag, project:projects(name, code)')
@@ -78,7 +84,8 @@ export async function GET(req: Request) {
       .in('task_id_tag', tags)
       .order('log_date', { ascending: false })
       .order('created_at', { ascending: false });
-    const logsByTag = (relatedLogs ?? []).reduce(
+    type RelatedLog = (NonNullable<typeof relatedLogs>)[number];
+    const logsByTag = (relatedLogs ?? []).reduce<Record<string, RelatedLog[]>>(
       (acc, log) => {
         const tag = log.task_id_tag;
         if (tag) {
@@ -87,7 +94,7 @@ export async function GET(req: Request) {
         }
         return acc;
       },
-      {} as Record<string, typeof relatedLogs extends (infer U)[] ? U[] : never>
+      {}
     );
     const data = tasks.map((t) => ({
       ...t,

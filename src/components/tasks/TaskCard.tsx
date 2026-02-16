@@ -27,7 +27,7 @@ const BORDER_COLORS: Record<TaskState, string> = {
   done: 'border-l-slate-500',
 };
 
-export function TaskCard({ task, isReview: _isReview = false }: TaskCardProps) {
+export function TaskCard({ task }: TaskCardProps) {
   const queryClient = useQueryClient();
   const currentState = getTaskState(task);
 

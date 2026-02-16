@@ -17,9 +17,12 @@ export default async function DashboardPage() {
     .or('task_state.not.is.null,task_id_tag.not.is.null')
     .order('created_at', { ascending: false })
     .limit(200);
+  type ProjectShape = { id: string; name: string; code: string } | null;
   const todayTasks = (taskLogs ?? [])
     .map((l) => {
       if (!l.project_id) return null;
+      const rawProject = (l as { project?: ProjectShape | ProjectShape[] }).project;
+      const project: ProjectShape = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
       return {
         id: l.id,
         user_id: l.user_id,
@@ -34,7 +37,7 @@ export default async function DashboardPage() {
         ai_recommended: false,
         ai_reason: null,
         sort_order: 0,
-        project: l.project ?? null,
+        project,
       };
     })
     .filter(Boolean) as Parameters<typeof TaskBoard>[0]['initialTasks'];
