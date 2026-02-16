@@ -25,7 +25,7 @@ export default function LoginPage() {
       setMessage(error.message);
       return;
     }
-    window.location.href = '/dashboard';
+    window.location.href = '/';
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
