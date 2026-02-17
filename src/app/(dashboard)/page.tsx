@@ -11,7 +11,7 @@ export default async function DashboardPage() {
 
   const { data: taskLogs } = await supabase
     .from('logs')
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, project:projects(id, name, code)')
+    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null')
@@ -38,6 +38,7 @@ export default async function DashboardPage() {
         ai_reason: null,
         sort_order: 0,
         project,
+        source: (l as { source?: string | null }).source ?? null,
       };
     })
     .filter(Boolean) as Parameters<typeof TaskBoard>[0]['initialTasks'];

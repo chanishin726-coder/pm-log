@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -56,44 +57,31 @@ export function TaskCard({ task }: TaskCardProps) {
       )
     : null;
 
-  return (
-    <div
-      className={`p-3 sm:p-4 border-l-4 ${priorityColor} bg-card rounded-lg border shadow-sm min-h-[52px]`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-mono text-muted-foreground">
-              {task.task_id_tag}
-            </span>
-            {task.project && (
-              <span className="text-xs text-muted-foreground">
-                {task.project.name}
-              </span>
-            )}
-            {dDay != null && (
-              <span
-                className={`text-xs ${dDay <= 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
-              >
-                D{dDay <= 0 ? '' : '-'}{Math.abs(dDay)}
-              </span>
-            )}
-          </div>
-
-          <p
-            className={`mt-1 text-sm ${currentState === 'done' ? 'line-through text-muted-foreground' : ''}`}
+  const cardContent = (
+    <>
+      {/* 1행: 태그·프로젝트·발신/대상·D-day + 상태 버튼 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-mono text-muted-foreground">
+          {task.task_id_tag}
+        </span>
+        {task.project && (
+          <span className="text-xs text-muted-foreground">
+            {task.project.name}
+          </span>
+        )}
+        {task.source && (
+          <span className="text-xs text-muted-foreground" title="발신/대상">
+            {task.source}
+          </span>
+        )}
+        {dDay != null && (
+          <span
+            className={`text-xs ${dDay <= 0 ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
           >
-            {task.description}
-          </p>
-
-          {task.ai_recommended && task.ai_reason && (
-            <p className="mt-1 text-xs text-muted-foreground italic">
-              💡 {task.ai_reason}
-            </p>
-          )}
-        </div>
-
-        <div className="flex gap-1 shrink-0 flex-wrap">
+            D{dDay <= 0 ? '' : '-'}{Math.abs(dDay)}
+          </span>
+        )}
+        <div className="flex gap-1 shrink-0 flex-wrap ml-auto" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
           <Button
             size="sm"
             variant={currentState === null ? 'secondary' : 'outline'}
@@ -119,6 +107,32 @@ export function TaskCard({ task }: TaskCardProps) {
           ))}
         </div>
       </div>
-    </div>
+
+      {/* 2행: 본문 전체 너비(파란 영역) */}
+      <div className="mt-2 w-full">
+        <p
+          className={`text-sm whitespace-pre-wrap break-words ${currentState === 'done' ? 'line-through text-muted-foreground' : ''}`}
+        >
+          {task.description}
+        </p>
+        {task.ai_recommended && task.ai_reason && (
+          <p className="mt-1 text-xs text-muted-foreground italic">
+            💡 {task.ai_reason}
+          </p>
+        )}
+      </div>
+    </>
   );
+
+  const cardClassName = `block p-3 sm:p-4 border-l-4 ${priorityColor} bg-card rounded-lg border shadow-sm min-h-[52px] text-left`;
+
+  if (task.log_id) {
+    return (
+      <Link href={`/logs/${task.log_id}`} className={cardClassName}>
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return <div className={cardClassName}>{cardContent}</div>;
 }

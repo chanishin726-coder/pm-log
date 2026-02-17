@@ -13,6 +13,7 @@ function logToTaskShape(log: {
   task_id_tag: string | null;
   task_state: Task['task_state'];
   created_at: string;
+  source?: string | null;
   project?: { id: string; name: string; code: string } | null;
 }): Task | null {
   if (!log.project_id) return null;
@@ -31,6 +32,7 @@ function logToTaskShape(log: {
     ai_reason: null,
     sort_order: 0,
     project: log.project ?? null,
+    source: log.source ?? null,
   };
 }
 
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
   // 할일 = (1) task_id_tag/task_state 있는 로그, (2) no_task_needed=false인 로그(AI가 할일로 분류)
   let query = supabase
     .from('logs')
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, project:projects(id, name, code)')
+    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null,no_task_needed.eq.false')

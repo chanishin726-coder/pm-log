@@ -54,6 +54,8 @@ export interface Task {
   ai_reason: string | null;
   sort_order: number;
   project?: { id: string; name: string; code: string } | null;
+  /** 발신/대상 (누구한테 받은·보낸 내용인지) */
+  source?: string | null;
 }
 
 export interface DailyReport {
