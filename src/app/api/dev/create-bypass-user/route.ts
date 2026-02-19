@@ -3,10 +3,12 @@ import { NextResponse } from 'next/server';
 
 /**
  * 개발용: Bypass 모드에서 쓸 테스트 사용자를 Supabase에 생성하고 UUID를 반환합니다.
- * 브라우저에서 한 번만 호출한 뒤 반환된 userId를 .env의 AUTH_BYPASS_USER_ID에 넣으세요.
- * (AUTH_BYPASS=true 이고 AUTH_BYPASS_USER_ID가 비어 있을 때만 동작합니다.)
+ * NODE_ENV=development 일 때만 동작합니다. 운영 배포에서는 호출해도 404입니다.
  */
 export async function GET() {
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   const bypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
   const hasBypassId = !!process.env.AUTH_BYPASS_USER_ID?.trim();
   if (!bypass || hasBypassId) {

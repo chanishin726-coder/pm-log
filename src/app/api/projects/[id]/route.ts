@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { updateProjectSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -43,12 +44,22 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const body = await req.json();
-  const { name, code, description, status } = body;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const parsed = updateProjectSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.flatten().formErrors[0] || '입력값을 확인해 주세요.';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const { name, code, description, status } = parsed.data;
 
   const update: Record<string, unknown> = {};
   if (name !== undefined) update.name = name;
-  if (code !== undefined) update.code = code.slice(0, 4);
+  if (code !== undefined) update.code = code;
   if (description !== undefined) update.description = description;
   if (status !== undefined) update.status = status;
 

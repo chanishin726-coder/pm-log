@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { NO_PROJECT_LABEL } from '@/lib/utils';
 import { getTaskStateLabel, type TaskState } from '@/lib/task-state';
+import { getApiErrorMessage } from '@/lib/api';
 
 export default function LogDetailPage() {
   const params = useParams();
@@ -28,6 +29,7 @@ export default function LogDetailPage() {
   const [editCategoryCode, setEditCategoryCode] = useState('');
   const [editTaskState, setEditTaskState] = useState<string>('');
   const [editProjectId, setEditProjectId] = useState<string>('');
+  const [editLogDate, setEditLogDate] = useState<string>('');
 
   const { data: log, isLoading, error } = useQuery({
     queryKey: ['log', id],
@@ -48,15 +50,15 @@ export default function LogDetailPage() {
   });
 
   const { mutate: saveLog, isPending: saving } = useMutation({
-    mutationFn: async (payload: { source?: string; content?: string; task_id_tag?: string | null; log_type?: string; category_code?: string | null; task_state?: TaskState | null; project_id?: string | null }) => {
+    mutationFn: async (payload: { source?: string; content?: string; task_id_tag?: string | null; log_type?: string; category_code?: string | null; task_state?: TaskState | null; project_id?: string | null; log_date?: string }) => {
       const res = await fetch(`/api/logs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '저장 실패');
+        const msg = await getApiErrorMessage(res, '저장 실패');
+        throw new Error(msg);
       }
       return res.json();
     },
@@ -74,8 +76,8 @@ export default function LogDetailPage() {
     mutationFn: async () => {
       const res = await fetch(`/api/logs/${id}`, { method: 'DELETE' });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '삭제 실패');
+        const msg = await getApiErrorMessage(res, '삭제 실패');
+        throw new Error(msg);
       }
     },
     onSuccess: () => {
@@ -103,6 +105,7 @@ export default function LogDetailPage() {
       setEditCategoryCode(log.category_code ?? '');
       setEditTaskState(logWithState.task_state ?? '');
       setEditProjectId(log.project_id ?? '');
+      setEditLogDate(log.log_date ?? '');
       setEditing(true);
     }
   };
@@ -116,6 +119,7 @@ export default function LogDetailPage() {
       category_code: editCategoryCode.trim() || null,
       task_state: editTaskState ? (editTaskState as TaskState) : null,
       project_id: editProjectId || null,
+      log_date: editLogDate.trim() || undefined,
     });
   };
 
@@ -181,7 +185,16 @@ export default function LogDetailPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary">{log.log_type}</Badge>
           <span className="font-medium">{log.project?.name ?? NO_PROJECT_LABEL}</span>
-          <span className="text-muted-foreground text-sm">{log.log_date}</span>
+          {editing ? (
+            <Input
+              type="date"
+              value={editLogDate}
+              onChange={(e) => setEditLogDate(e.target.value)}
+              className="h-8 w-auto text-sm text-muted-foreground border-muted-foreground/30"
+            />
+          ) : (
+            <span className="text-muted-foreground text-sm">{log.log_date}</span>
+          )}
           {log.category_code && <Badge variant="outline">{log.category_code}</Badge>}
           {(log as { task_state?: string | null }).task_state && (
             <Badge variant="outline">{getTaskStateLabel((log as { task_state: TaskState }).task_state)}</Badge>

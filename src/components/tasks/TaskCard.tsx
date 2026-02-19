@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { Task } from '@/types/database';
+import { getApiErrorMessage } from '@/lib/api';
 import { getTaskState, type TaskState } from '@/lib/task-state';
 
 interface TaskCardProps {
@@ -39,14 +40,17 @@ export function TaskCard({ task }: TaskCardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state }),
       });
-      if (!res.ok) throw new Error('상태 변경 실패');
+      if (!res.ok) {
+        const msg = await getApiErrorMessage(res, '상태 변경 실패');
+        throw new Error(msg);
+      }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('상태가 변경되었습니다');
     },
-    onError: () => toast.error('변경 실패'),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const priorityColor = currentState ? BORDER_COLORS[currentState] : 'border-l-muted';

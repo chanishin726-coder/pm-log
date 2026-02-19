@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api';
 
 export function SyncButton() {
   const queryClient = useQueryClient();
@@ -12,8 +13,8 @@ export function SyncButton() {
     mutationFn: async () => {
       const res = await fetch('/api/logs/sync', { method: 'POST' });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '동기화 실패');
+        const msg = await getApiErrorMessage(res, '동기화 실패');
+        throw new Error(msg);
       }
       return res.json();
     },

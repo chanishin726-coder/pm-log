@@ -106,23 +106,49 @@ export async function POST(req: Request) {
     .filter((l) => recentDates.includes(l.log_date))
     .sort((a, b) => (a.log_date !== b.log_date ? a.log_date.localeCompare(b.log_date) : (a.created_at ?? '').localeCompare(b.created_at ?? '')));
 
-  // 할일 = logs (task_state 또는 task_id_tag 있는 것, 완료 제외)
+  // 할일 = logs (task_state 또는 task_id_tag 있는 것). report_date 기준 task_state_history에서 당시 상태 조회.
   const { data: taskLogs } = await supabase
     .from('logs')
-    .select('task_id_tag, content, task_state, project:projects(name, code)')
+    .select('id, task_id_tag, content, task_state, project:projects(name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null')
     .order('created_at', { ascending: true });
+
+  const logIds = (taskLogs ?? []).map((l) => l.id).filter(Boolean);
+  const endOfTargetDate = `${targetDate}T23:59:59.999Z`;
+  let effectiveStateByLogId: Record<string, string> = {};
+
+  if (logIds.length > 0) {
+    const { data: historyRows } = await supabase
+      .from('task_state_history')
+      .select('log_id, task_state, changed_at')
+      .in('log_id', logIds)
+      .lte('changed_at', endOfTargetDate)
+      .order('changed_at', { ascending: false });
+
+    const seen = new Set<string>();
+    for (const row of historyRows ?? []) {
+      const lid = (row as { log_id: string }).log_id;
+      if (!seen.has(lid)) {
+        seen.add(lid);
+        effectiveStateByLogId[lid] = (row as { task_state: string }).task_state;
+      }
+    }
+  }
+
   const tasks = (taskLogs ?? [])
-    .filter((l) => (l as { task_state?: string | null }).task_state !== 'done')
-    .map((l) => ({
-      task_id_tag: l.task_id_tag ?? '',
-      description: l.content ?? '',
-      task_state: (l as { task_state?: string | null }).task_state ?? null,
-      due_date: null as string | null,
-    }))
-    .filter((t) => t.task_id_tag);
+    .map((l) => {
+      const effectiveState = effectiveStateByLogId[l.id] ?? (l as { task_state?: string | null }).task_state ?? null;
+      return {
+        task_id_tag: l.task_id_tag ?? '',
+        description: l.content ?? '',
+        task_state: effectiveState,
+        due_date: null as string | null,
+      };
+    })
+    .filter((t) => t.task_id_tag)
+    .filter((t) => t.task_state !== 'done');
 
   const prevDate = new Date(targetDate);
   prevDate.setDate(prevDate.getDate() - 1);
@@ -176,32 +202,38 @@ export async function POST(req: Request) {
     const taskIdTag = (tag as string) ?? `#${nt.projectCode}-${targetDate.replace(/-/g, '')}-99`;
     const firstLogId = nt.logIds?.[0];
     if (firstLogId && logIdsThisDay.has(firstLogId)) {
-      await supabase.from('logs').update({ task_id_tag: taskIdTag, task_state: 'review', no_task_needed: false }).eq('id', firstLogId).eq('user_id', userId);
+      // 이미 task_id_tag가 있으면 덮어쓰지 않음(고유 ID 수동 지정 보존). task_state는 사용자만 수동 변경.
+      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', firstLogId).eq('user_id', userId).is('task_id_tag', null);
     } else {
-      await supabase.from('logs').insert({
-        user_id: userId,
-        project_id: proj.id,
-        log_date: targetDate,
-        raw_input: nt.description,
-        content: nt.description,
-        log_type: 'I',
-        task_id_tag: taskIdTag,
-        task_state: 'review',
-        no_task_needed: false,
-      });
+      const { data: newLog } = await supabase
+        .from('logs')
+        .insert({
+          user_id: userId,
+          project_id: proj.id,
+          log_date: targetDate,
+          raw_input: nt.description,
+          content: nt.description,
+          log_type: 'I',
+          task_id_tag: taskIdTag,
+          no_task_needed: false,
+        })
+        .select('id')
+        .single();
+      // task_state는 사용자만 수동 변경. 이력은 기록하지 않음.
     }
     for (const logId of nt.logIds ?? []) {
       if (!logIdsThisDay.has(logId)) continue;
-      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', logId).eq('user_id', userId);
+      // 이미 task_id_tag가 있으면 덮어쓰지 않음
+      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', logId).eq('user_id', userId).is('task_id_tag', null);
     }
   }
 
   for (const a of logAssignments) {
     if (!logIdsThisDay.has(a.logId)) continue;
     if (a.taskIdTag != null) {
-      await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('id', a.logId).eq('user_id', userId);
+      // 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
+      await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('id', a.logId).eq('user_id', userId).is('task_id_tag', null);
     }
-    // taskIdTag가 null이면 기존 task_id_tag를 덮어쓰지 않음(이미 부여된 태그 보존)
   }
 
   // 3. 일지 및 소통 이력: 프로젝트 있는 로그 전부, 1수준 project → 2수준 task_id_tag(없으면 source) → 3수준 created_at, 각 줄은 source 표기

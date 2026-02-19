@@ -1,6 +1,7 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { getSupabasePublicEnv } from '@/lib/env';
 
 const AUTH_BYPASS = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -10,7 +11,7 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
  * (auth.uid()가 없어서 RLS 정책이 막는 문제 해결)
  */
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const { url } = getSupabasePublicEnv();
   if (AUTH_BYPASS && SERVICE_ROLE_KEY) {
     return createSupabaseClient(url, SERVICE_ROLE_KEY, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -18,7 +19,8 @@ export async function createClient() {
   }
 
   const cookieStore = await cookies();
-  return createServerClient(url, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  const { anonKey } = getSupabasePublicEnv();
+  return createServerClient(url, anonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll();

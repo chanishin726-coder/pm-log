@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { createProjectSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -33,19 +34,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { name, code, description, status } = body;
-
-  if (!name || !code) {
-    return NextResponse.json({ error: 'name, code required' }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  const parsedBody = createProjectSchema.safeParse(body);
+  if (!parsedBody.success) {
+    const msg = parsedBody.error.flatten().formErrors[0] || 'name, code required';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const { name, code, description } = parsedBody.data;
+  const status = typeof (body as { status?: string }).status === 'string' ? (body as { status: string }).status : 'active';
 
   const { data, error } = await supabase
     .from('projects')
     .insert({
       user_id: userId,
       name,
-      code: code.slice(0, 4),
+      code,
       description: description || null,
       status: status || 'active',
     })

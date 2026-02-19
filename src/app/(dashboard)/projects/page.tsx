@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/card';
 import { Pencil, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api';
 import type { Project } from '@/types/database';
 
 export default function ProjectsPage() {
@@ -43,8 +44,8 @@ export default function ProjectsPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '생성 실패');
+        const msg = await getApiErrorMessage(res, '생성 실패');
+        throw new Error(msg);
       }
       return res.json();
     },
@@ -64,7 +65,7 @@ export default function ProjectsPage() {
       toast.error('이름과 코드를 입력하세요.');
       return;
     }
-    createProject({ name: name.trim(), code: code.trim().slice(0, 4), description: description.trim() || undefined });
+    createProject({ name: name.trim(), code: code.trim(), description: description.trim() || undefined });
   };
 
   const { mutate: updateProject, isPending: updating } = useMutation({
@@ -82,11 +83,11 @@ export default function ProjectsPage() {
       const res = await fetch(`/api/projects/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: n, code: c.trim().slice(0, 4), description: d?.trim() || null }),
+        body: JSON.stringify({ name: n, code: c.trim(), description: d?.trim() || null }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '수정 실패');
+        const msg = await getApiErrorMessage(res, '수정 실패');
+        throw new Error(msg);
       }
       return res.json();
     },

@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, FileText, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getApiErrorMessage } from '@/lib/api';
 
 export default function DailyReportPage() {
   const queryClient = useQueryClient();
@@ -33,8 +34,8 @@ export default function DailyReportPage() {
         body: JSON.stringify({ date }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '생성 실패');
+        const msg = await getApiErrorMessage(res, '생성 실패');
+        throw new Error(msg);
       }
       return res.json();
     },
@@ -53,8 +54,8 @@ export default function DailyReportPage() {
         body: JSON.stringify({ date, content }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '저장 실패');
+        const msg = await getApiErrorMessage(res, '저장 실패');
+        throw new Error(msg);
       }
       return res.json();
     },
@@ -87,8 +88,8 @@ export default function DailyReportPage() {
         method: 'DELETE',
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '삭제 실패');
+        const msg = await getApiErrorMessage(res, '삭제 실패');
+        throw new Error(msg);
       }
     },
     onSuccess: () => {

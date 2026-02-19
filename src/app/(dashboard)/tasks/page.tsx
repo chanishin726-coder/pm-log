@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Loader2, Sparkles } from 'lucide-react';
+import { getApiErrorMessage } from '@/lib/api';
 
 export default function TasksPage() {
   const queryClient = useQueryClient();
@@ -17,8 +18,8 @@ export default function TasksPage() {
         body: JSON.stringify({}),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '실패');
+        const msg = await getApiErrorMessage(res, '실패');
+        throw new Error(msg);
       }
       return res.json();
     },

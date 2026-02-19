@@ -9,7 +9,17 @@ import {
 } from './prompts';
 import type { Project } from '@/types/database';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+let _genAI: GoogleGenerativeAI | null = null;
+
+function getGenAI(): GoogleGenerativeAI {
+  if (_genAI) return _genAI;
+  const key = process.env.GEMINI_API_KEY?.trim();
+  if (!key) {
+    throw new Error('GEMINI_API_KEY is not set');
+  }
+  _genAI = new GoogleGenerativeAI(key);
+  return _genAI;
+}
 
 /** AI가 반환한 JSON이 끝 쉼표·빈 요소·마크다운 등으로 깨진 경우 복구 후 파싱 */
 function safeParseJson<T>(raw: string): T {
@@ -53,7 +63,7 @@ export async function parseLog(
   rawInput: string,
   projects: Project[]
 ): Promise<ParsedLog> {
-  const model = genAI.getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
   const prompt = PARSE_LOG_PROMPT(projects) + `\n\n입력: ${rawInput}`;
 
   const result = await model.generateContent(prompt);
@@ -82,7 +92,7 @@ export async function classifyLogsAsTask(data: {
     project?: { name: string } | null;
   }>;
 }): Promise<TaskClassifyResult> {
-  const model = genAI.getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
 
   const prompt = `${TASK_CLASSIFY_PROMPT}
 
@@ -141,7 +151,7 @@ export async function generateDailyReport(data: {
   previousReport?: string;
   targetDate: string;
 }): Promise<DailyReportResult> {
-  const model = genAI.getGenerativeModel({ model: MODEL_PRO });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_PRO });
 
   const logsText = data.logs
     .map((l) => {
@@ -224,7 +234,7 @@ const EMBEDDING_MODEL =
   process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001';
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const key = process.env.GEMINI_API_KEY;
+  const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error('GEMINI_API_KEY is not set');
 
   // DB log_embeddings.embedding은 vector(768). gemini-embedding-001 기본은 3072이므로 768로 요청.
@@ -261,7 +271,7 @@ export async function detectRelation(
   suggestedTag?: string;
   relationshipType?: string;
 }> {
-  const model = genAI.getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
 
   const prompt = RELATE_LOGS_PROMPT.replace('{project1}', log1.project?.name || '기타')
     .replace('{type1}', log1.log_type)
@@ -293,7 +303,7 @@ export async function answerQuery(data: {
   }>;
   tasks: unknown[];
 }): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: MODEL_PRO });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_PRO });
 
   const logsText = data.logs
     .map(
@@ -312,7 +322,7 @@ export async function answerQuery(data: {
 }
 
 export async function summarizeForExecutive(dailyReport: string): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
 
   const prompt = `${EXECUTIVE_SUMMARY_PROMPT}\n\n## 입력\n${dailyReport}`;
 

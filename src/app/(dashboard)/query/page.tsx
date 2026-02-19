@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, Search, Database } from 'lucide-react';
 import { toast } from 'sonner';
+import { getApiErrorMessage } from '@/lib/api';
 import Link from 'next/link';
 
 export default function QueryPage() {
@@ -22,8 +23,8 @@ export default function QueryPage() {
         body: JSON.stringify({ query: q }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '질의 실패');
+        const msg = await getApiErrorMessage(res, '질의 실패');
+        throw new Error(msg);
       }
       return res.json();
     },
@@ -47,8 +48,8 @@ export default function QueryPage() {
           body: JSON.stringify({}),
         });
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error || '임베딩 생성 실패');
+          const msg = await getApiErrorMessage(res, '임베딩 생성 실패');
+          throw new Error(msg);
         }
         const data = await res.json();
         total += data.created ?? 0;

@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { logToTaskShape, normalizeProject } from '@/lib/task-from-log';
 import { NextResponse } from 'next/server';
 
+/** [id] = log id. 할일은 로그 기반이므로 logs 테이블 기준으로 조회/수정/삭제합니다. */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -16,20 +18,27 @@ export async function GET(
 
   const { id } = await params;
 
-  const { data, error } = await supabase
-    .from('tasks')
-    .select('*, project:projects(id, name, code), log:logs(id, content)')
+  const { data: log, error } = await supabase
+    .from('logs')
+    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
     .eq('id', id)
     .eq('user_id', userId)
     .single();
 
-  if (error || !data) {
+  if (error || !log) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json(data);
+  const normalized = normalizeProject(log);
+  const task = logToTaskShape(normalized);
+  if (!task) {
+    return NextResponse.json({ error: 'Not found (로그에 프로젝트가 없습니다)' }, { status: 404 });
+  }
+
+  return NextResponse.json(task);
 }
 
+/** [id] = log id. content(설명), task_state(우선순위) 수정. */
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -43,29 +52,75 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const body = await req.json();
-  const { description, priority, due_date } = body;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const { content, task_state: bodyTaskState, priority } = body as { content?: string; task_state?: string; priority?: string };
 
   const update: Record<string, unknown> = {};
-  if (description !== undefined) update.description = description;
-  if (priority !== undefined) update.priority = priority;
-  if (due_date !== undefined) update.due_date = due_date;
+  if (content !== undefined) update.content = content;
+  if (bodyTaskState !== undefined) {
+    update.task_state = bodyTaskState;
+  } else if (priority !== undefined && ['high', 'medium', 'low'].includes(priority)) {
+    update.task_state = priority;
+  }
 
-  const { data, error } = await supabase
-    .from('tasks')
+  if (Object.keys(update).length === 0) {
+    const { data: log } = await supabase
+      .from('logs')
+      .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    if (!log) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    const task = logToTaskShape(normalizeProject(log));
+    return NextResponse.json(task ?? log);
+  }
+
+  let previousTaskState: string | null = null;
+  if (update.task_state !== undefined) {
+    const { data: existing } = await supabase
+      .from('logs')
+      .select('task_state')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    previousTaskState = (existing as { task_state?: string | null } | null)?.task_state ?? null;
+  }
+
+  const { data: log, error } = await supabase
+    .from('logs')
     .update(update)
     .eq('id', id)
     .eq('user_id', userId)
-    .select()
+    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!log) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
-  return NextResponse.json(data);
+  const newState = update.task_state as string | undefined;
+  if (newState !== undefined && previousTaskState !== newState && newState != null) {
+    await supabase.from('task_state_history').insert({
+      log_id: id,
+      task_state: newState,
+    });
+  }
+
+  const task = logToTaskShape(normalizeProject(log));
+  return NextResponse.json(task ?? log);
 }
 
+/** [id] = log id. 해당 로그(할일) 삭제. */
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -81,7 +136,7 @@ export async function DELETE(
   const { id } = await params;
 
   const { error } = await supabase
-    .from('tasks')
+    .from('logs')
     .delete()
     .eq('id', id)
     .eq('user_id', userId);

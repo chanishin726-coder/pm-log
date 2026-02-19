@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, subDays } from 'date-fns';
+import { getApiErrorMessage } from '@/lib/api';
 
 export default function ExecutiveReportPage() {
   const [startDate, setStartDate] = useState(() =>
@@ -24,8 +25,8 @@ export default function ExecutiveReportPage() {
         body: JSON.stringify({ startDate, endDate }),
       });
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '요약 실패');
+        const msg = await getApiErrorMessage(res, '요약 실패');
+        throw new Error(msg);
       }
       return res.json();
     },

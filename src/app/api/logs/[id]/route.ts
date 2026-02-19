@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { updateLogSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -43,8 +44,29 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const body = await req.json();
-  const { content, log_type, category_code, source, task_id_tag, task_state, project_id } = body;
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const parsed = updateLogSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.flatten().formErrors[0] || '입력값을 확인해 주세요.';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const { content, log_type, category_code, source, task_id_tag, task_state, project_id, log_date } = parsed.data;
+
+  let previousTaskState: string | null = null;
+  if (task_state !== undefined) {
+    const { data: existing } = await supabase
+      .from('logs')
+      .select('task_state')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+    previousTaskState = (existing as { task_state?: string | null } | null)?.task_state ?? null;
+  }
 
   const update: Record<string, unknown> = {};
   if (content !== undefined) update.content = content;
@@ -54,6 +76,7 @@ export async function PUT(
   if (task_id_tag !== undefined) update.task_id_tag = task_id_tag;
   if (task_state !== undefined) update.task_state = task_state;
   if (project_id !== undefined) update.project_id = project_id === '' || project_id == null ? null : project_id;
+  if (log_date !== undefined && log_date !== '') update.log_date = log_date;
 
   const { data, error } = await supabase
     .from('logs')
@@ -65,6 +88,13 @@ export async function PUT(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (task_state !== undefined && previousTaskState !== task_state) {
+    await supabase.from('task_state_history').insert({
+      log_id: id,
+      task_state: task_state as string,
+    });
   }
 
   return NextResponse.json(data);

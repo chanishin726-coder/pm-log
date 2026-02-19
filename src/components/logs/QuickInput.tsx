@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { getApiErrorMessage } from '@/lib/api';
 
 export function QuickInput() {
   const [text, setText] = useState('');
@@ -20,8 +21,8 @@ export function QuickInput() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '저장 실패');
+        const msg = await getApiErrorMessage(res, '저장 실패');
+        throw new Error(msg);
       }
 
       return res.json();

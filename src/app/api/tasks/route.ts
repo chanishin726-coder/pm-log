@@ -1,40 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { logToTaskShape, normalizeProject } from '@/lib/task-from-log';
+import { createTaskSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 import type { Task } from '@/types/database';
-
-/** 로그 행을 할일(Task) 형태로 변환 */
-function logToTaskShape(log: {
-  id: string;
-  user_id: string;
-  project_id: string | null;
-  log_date: string;
-  content: string;
-  task_id_tag: string | null;
-  task_state: Task['task_state'];
-  created_at: string;
-  source?: string | null;
-  project?: { id: string; name: string; code: string } | null;
-}): Task | null {
-  if (!log.project_id) return null;
-  return {
-    id: log.id,
-    user_id: log.user_id,
-    log_id: log.id,
-    project_id: log.project_id,
-    task_id_tag: log.task_id_tag ?? '',
-    description: log.content,
-    task_state: log.task_state ?? null,
-    due_date: null,
-    created_at: log.created_at,
-    completed_at: null,
-    ai_recommended: false,
-    ai_reason: null,
-    sort_order: 0,
-    project: log.project ?? null,
-    source: log.source ?? null,
-  };
-}
 
 export async function GET(req: Request) {
   const configError = getAuthBypassConfigError();
@@ -47,6 +16,8 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get('projectId');
+  const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '200', 10)), 500);
+  const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
   // 할일 = (1) task_id_tag/task_state 있는 로그, (2) no_task_needed=false인 로그(AI가 할일로 분류)
   let query = supabase
@@ -56,7 +27,7 @@ export async function GET(req: Request) {
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null,no_task_needed.eq.false')
     .order('created_at', { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
 
   if (projectId) query = query.eq('project_id', projectId);
   const stateParam = searchParams.get('state');
@@ -68,12 +39,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  type LogWithProject = Parameters<typeof logToTaskShape>[0];
-  const normalizeProject = (l: (typeof logs)[0]): LogWithProject['project'] => {
-    const p = (l as { project?: { id: string; name: string; code: string } | { id: string; name: string; code: string }[] | null }).project;
-    return Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
-  };
-  const normalizedLogs: LogWithProject[] = (logs ?? []).map((l) => ({ ...l, project: normalizeProject(l) } as LogWithProject));
+  const normalizedLogs = (logs ?? []).map((l) => normalizeProject(l));
   const tasks = normalizedLogs.map(logToTaskShape).filter((t): t is Task => t != null);
 
   const withLogs = searchParams.get('withLogs') === 'true';
@@ -117,12 +83,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { project_id, task_id_tag, description, priority } = body;
-
-  if (!project_id || !description) {
-    return NextResponse.json({ error: 'project_id, description required' }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  const parsed = createTaskSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.flatten().formErrors[0] || 'project_id, description을 입력해 주세요.';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const { project_id, task_id_tag, description, priority } = parsed.data;
 
   let tag = task_id_tag;
   if (!tag) {
@@ -166,6 +138,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const task = logToTaskShape(log);
-  return NextResponse.json(task ?? log);
+  const normalized = normalizeProject(log);
+  const task = logToTaskShape(normalized);
+  return NextResponse.json(task ?? normalized);
 }

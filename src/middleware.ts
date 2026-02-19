@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getSupabasePublicEnv } from '@/lib/env';
 
 const AUTH_BYPASS = process.env.NEXT_PUBLIC_AUTH_BYPASS === 'true';
 
@@ -13,9 +14,10 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  const { url, anonKey } = getSupabasePublicEnv();
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

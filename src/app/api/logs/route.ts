@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
 import { parseLog } from '@/lib/ai/gemini';
 import { parseLogContent, NO_PROJECT_FILTER_VALUE } from '@/lib/utils';
+import { createLogSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
@@ -13,21 +14,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { rawInput: string };
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { rawInput } = body;
-  if (!rawInput || typeof rawInput !== 'string') {
-    return NextResponse.json({ error: 'rawInput required' }, { status: 400 });
+  const parsedBody = createLogSchema.safeParse(body);
+  if (!parsedBody.success) {
+    const msg = parsedBody.error.flatten().formErrors[0] || 'rawInput required';
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
+  const { rawInput } = parsedBody.data;
 
   const { data: projects } = await supabase
     .from('projects')
-    .select('*')
+    .select('id, name, code')
     .eq('user_id', userId);
 
   let parsed;
@@ -40,6 +43,7 @@ export async function POST(req: Request) {
     );
   }
 
+  let project: { id: string } | null = null;
   if (parsed.projectCode && projects && projects.length > 0) {
     const found = projects.find((p) => p.code === parsed.projectCode);
     if (!found) {
@@ -48,13 +52,12 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    project = found;
   }
-
-  const project = projects?.find((p) => p.code === parsed.projectCode);
 
   const parsedContent = parseLogContent(parsed.content);
   const { source, content: bodyContent } = parsedContent;
-  let parsedTag = parsedContent.task_id_tag;
+  let parsedTag: string | null = parsedContent.task_id_tag;
   if (parsedTag == null && rawInput?.trim()) {
     const fromRaw = parseLogContent(rawInput.trim());
     if (fromRaw.task_id_tag) parsedTag = fromRaw.task_id_tag;
@@ -86,7 +89,9 @@ export async function POST(req: Request) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ logId: log.id }),
-    }).catch(() => {});
+    }).catch((err) => {
+      console.warn('[POST /api/logs] Embedding request failed for log', log.id, err);
+    });
   }
 
   return NextResponse.json(log);
@@ -107,6 +112,8 @@ export async function GET(req: Request) {
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
   const keyword = searchParams.get('keyword');
+  const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '100', 10)), 500);
+  const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
   let query = supabase
     .from('logs')
@@ -114,7 +121,7 @@ export async function GET(req: Request) {
     .eq('user_id', userId)
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(100);
+    .range(offset, offset + limit - 1);
 
   if (projectId === NO_PROJECT_FILTER_VALUE) {
     query = query.is('project_id', null);

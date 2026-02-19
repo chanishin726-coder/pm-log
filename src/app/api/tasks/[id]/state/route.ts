@@ -1,9 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { updateTaskStateSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
-import { type TaskState } from '@/lib/task-state';
-
-const VALID_STATES: TaskState[] = ['high', 'medium', 'low', 'review', 'done'];
 
 /** 할일 상태 업데이트. id는 log id. */
 export async function PUT(
@@ -19,19 +17,29 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const body = await req.json();
-  const state = body.state as string | null;
-
-  if (state != null && !VALID_STATES.includes(state as TaskState)) {
-    return NextResponse.json(
-      { error: 'Invalid state. Use: null, high, medium, low, review, done' },
-      { status: 400 }
-    );
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+  const parsedBody = updateTaskStateSchema.safeParse(body);
+  if (!parsedBody.success) {
+    const msg = parsedBody.error.flatten().formErrors[0] || 'Invalid state. Use: null, high, medium, low, review, done';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const newState = parsedBody.data.state;
+  const { data: existing } = await supabase
+    .from('logs')
+    .select('task_state')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .single();
+  const previousState = (existing as { task_state?: string | null } | null)?.task_state ?? null;
 
   const { data, error } = await supabase
     .from('logs')
-    .update({ task_state: state ?? null })
+    .update({ task_state: newState })
     .eq('id', id)
     .eq('user_id', userId)
     .select()
@@ -39,6 +47,13 @@ export async function PUT(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (newState !== previousState && newState != null) {
+    await supabase.from('task_state_history').insert({
+      log_id: id,
+      task_state: newState,
+    });
   }
 
   return NextResponse.json(data);

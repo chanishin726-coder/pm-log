@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
 import { answerQuery, generateEmbedding } from '@/lib/ai/gemini';
+import { querySchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
@@ -12,12 +13,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({}));
-  const query = body.query;
-
-  if (!query || typeof query !== 'string') {
-    return NextResponse.json({ error: 'query required' }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
   }
+  const parsedBody = querySchema.safeParse(body);
+  if (!parsedBody.success) {
+    const msg = parsedBody.error.flatten().formErrors[0] || 'query required';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const { query } = parsedBody.data;
 
   let queryEmbedding: number[];
   try {
