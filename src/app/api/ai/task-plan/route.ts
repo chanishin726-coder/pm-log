@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { getTodayKST } from '@/lib/utils/date';
 import { classifyLogsAsTask } from '@/lib/ai/gemini';
 import { NextResponse } from 'next/server';
 
@@ -18,17 +19,17 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const date = body.date || new Date().toISOString().split('T')[0];
+  const date = body.date || getTodayKST();
   const targetDate = date;
 
-  // 1) 로그가 존재하는 최근 5개 날짜
+  // 1) 로그가 존재하는 최근 5개 날짜 (최대 500행 스캔으로 충분)
   const { data: dateRows } = await supabase
     .from('logs')
     .select('log_date')
     .eq('user_id', userId)
     .lte('log_date', targetDate)
     .order('log_date', { ascending: false })
-    .limit(2000);
+    .limit(500);
   const recentDates = Array.from(new Set((dateRows ?? []).map((r) => r.log_date))).slice(0, 5);
   if (recentDates.length === 0) {
     return NextResponse.json({ classified: 0, message: '대상 로그가 없습니다.' });

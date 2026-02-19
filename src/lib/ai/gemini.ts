@@ -62,7 +62,7 @@ export interface ParsedLog {
 export async function parseLog(
   rawInput: string,
   projects: Pick<Project, 'code' | 'name'>[]
-): Promise<ParsedLog> {
+): Promise<ParsedLog[]> {
   const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
   const prompt = PARSE_LOG_PROMPT(projects) + `\n\n입력: ${rawInput}`;
 
@@ -74,8 +74,11 @@ export async function parseLog(
     throw new Error('Failed to parse AI response');
   }
 
-  const parsed = safeParseJson<ParsedLog>(jsonMatch[0]);
-  return parsed;
+  const parsed = safeParseJson<{ items: ParsedLog[] }>(jsonMatch[0]);
+  if (!Array.isArray(parsed.items) || parsed.items.length === 0) {
+    throw new Error('AI 응답에 items 배열이 없거나 비어 있습니다.');
+  }
+  return parsed.items;
 }
 
 export interface TaskClassifyResult {

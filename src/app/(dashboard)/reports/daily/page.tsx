@@ -7,12 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, FileText, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { getTodayKST } from '@/lib/utils/date';
 import { getApiErrorMessage } from '@/lib/api';
 
 export default function DailyReportPage() {
   const queryClient = useQueryClient();
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = getTodayKST();
   const [date, setDate] = useState('');
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');

@@ -19,6 +19,7 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
       return res.json();
     },
     initialData: initialTasks.length > 0 ? initialTasks : undefined,
+    staleTime: initialTasks.length > 0 ? 60 * 1000 : 0,
   });
 
   const filterByState = (state: TaskState | null) => {

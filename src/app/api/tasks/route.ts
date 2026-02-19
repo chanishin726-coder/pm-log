@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { getTodayKST } from '@/lib/utils/date';
 import { logToTaskShape, normalizeProject, type LogRowForTaskShape } from '@/lib/task-from-log';
 import { createTaskSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getTodayKST();
     const { data: generatedTag } = await supabase.rpc('generate_task_id', {
       p_project_code: project.code,
       p_date: todayStr,
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
     tag = generatedTag as string;
   }
 
-  const logDate = new Date().toISOString().split('T')[0];
+  const logDate = getTodayKST();
   const taskState = (priority === 'high' || priority === 'medium' || priority === 'low')
     ? priority
     : 'medium';

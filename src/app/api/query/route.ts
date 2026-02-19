@@ -44,7 +44,11 @@ export async function POST(req: Request) {
   });
 
   if (!logs || logs.length === 0) {
-    const { data: userLogs } = await supabase.from('logs').select('id').eq('user_id', userId);
+    const { data: userLogs } = await supabase
+      .from('logs')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(5000);
     const logIds = userLogs?.map((l) => l.id) ?? [];
     let hasAnyEmbeddings = false;
     if (logIds.length > 0) {

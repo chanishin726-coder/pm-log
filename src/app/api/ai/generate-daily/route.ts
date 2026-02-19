@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
+import { getTodayKST } from '@/lib/utils/date';
 import { generateDailyReport } from '@/lib/ai/gemini';
 import { NextResponse } from 'next/server';
 
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const date = body.date || new Date().toISOString().split('T')[0];
+  const date = body.date || getTodayKST();
   const targetDate = date;
 
   const { data: logs } = await supabase
@@ -113,29 +114,43 @@ export async function POST(req: Request) {
     );
   }
 
-  // 로그가 기록된 최근 5일치만 조회 (당일 제외, 로그가 존재하는 날 기준)
-  const { data: recentLogsRaw } = await supabase
-    .from('logs')
-    .select('id, log_date, log_type, content, category_code, source, task_id_tag, created_at, project:projects(id, name, code)')
-    .eq('user_id', userId)
-    .lt('log_date', targetDate)
-    .order('log_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(500);
+  const prevDate = new Date(targetDate);
+  prevDate.setDate(prevDate.getDate() - 1);
+  const prevDateStr = prevDate.toISOString().split('T')[0];
+
+  const [recentResult, taskLogsResult, prevReportResult] = await Promise.all([
+    supabase
+      .from('logs')
+      .select('id, log_date, log_type, content, category_code, source, task_id_tag, created_at, project:projects(id, name, code)')
+      .eq('user_id', userId)
+      .lt('log_date', targetDate)
+      .order('log_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(200),
+    supabase
+      .from('logs')
+      .select('id, task_id_tag, content, task_state, source, project:projects(name, code)')
+      .eq('user_id', userId)
+      .not('project_id', 'is', null)
+      .lte('log_date', targetDate)
+      .or('task_state.not.is.null,task_id_tag.not.is.null')
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('daily_reports')
+      .select('content')
+      .eq('user_id', userId)
+      .eq('report_date', prevDateStr)
+      .single(),
+  ]);
+
+  const recentLogsRaw = recentResult.data;
   const recentDates = Array.from(new Set((recentLogsRaw ?? []).map((l) => l.log_date))).slice(0, 5);
   const recentLogs = (recentLogsRaw ?? [])
     .filter((l) => recentDates.includes(l.log_date))
     .sort((a, b) => (a.log_date !== b.log_date ? a.log_date.localeCompare(b.log_date) : (a.created_at ?? '').localeCompare(b.created_at ?? '')));
 
-  // 할일 = report_date 이전/당일 존재한 로그만. task_state_history에서 report_date 끝 시점 상태 사용.
-  const { data: taskLogs } = await supabase
-    .from('logs')
-    .select('id, task_id_tag, content, task_state, source, project:projects(name, code)')
-    .eq('user_id', userId)
-    .not('project_id', 'is', null)
-    .lte('log_date', targetDate)
-    .or('task_state.not.is.null,task_id_tag.not.is.null')
-    .order('created_at', { ascending: true });
+  const taskLogs = taskLogsResult.data;
+  const prevReport = prevReportResult.data;
 
   const logIds = (taskLogs ?? []).map((l) => l.id).filter(Boolean);
   const endOfTargetDate = `${targetDate}T23:59:59.999Z`;
@@ -181,17 +196,6 @@ export async function POST(req: Request) {
     })
     .filter((t) => t.task_id_tag)
     .filter((t) => t.task_state != null && t.task_state !== 'done');
-
-  const prevDate = new Date(targetDate);
-  prevDate.setDate(prevDate.getDate() - 1);
-  const prevDateStr = prevDate.toISOString().split('T')[0];
-
-  const { data: prevReport } = await supabase
-    .from('daily_reports')
-    .select('content')
-    .eq('user_id', userId)
-    .eq('report_date', prevDateStr)
-    .single();
 
   const normalizeProject = <T extends { project?: unknown }>(arr: T[]): T[] =>
     arr.map((l) => {
@@ -268,25 +272,33 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3. 일지 및 소통 이력: 프로젝트 있는 로그 전부, 1수준 project → 2수준 task_id_tag(없으면 source) → 3수준 created_at, 각 줄은 source 표기
-  const { data: logsForSection3 } = await supabase
-    .from('logs')
-    .select('id, log_type, content, source, task_id_tag, created_at, project:projects(name)')
-    .eq('user_id', userId)
-    .eq('log_date', targetDate)
-    .order('created_at', { ascending: true });
-
-  const section3Text = formatSection3Logs((logsForSection3 ?? []) as unknown as LogForSection3[]);
-
-  // 4. 완료항목: 그날(valid_from이 그날인 done) 완료 처리한 할일만
   const startOfTargetDate = `${targetDate}T00:00:00.000Z`;
-  const { data: doneHistoryRows } = await supabase
-    .from('task_state_history')
-    .select('log_id')
-    .eq('task_state', 'done')
-    .gte('valid_from', startOfTargetDate)
-    .lte('valid_from', endOfTargetDate);
+
+  const [logsForSection3Result, doneHistoryResult] = await Promise.all([
+    supabase
+      .from('logs')
+      .select('id, log_type, content, source, task_id_tag, created_at, project:projects(name)')
+      .eq('user_id', userId)
+      .eq('log_date', targetDate)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('task_state_history')
+      .select('log_id')
+      .eq('task_state', 'done')
+      .gte('valid_from', startOfTargetDate)
+      .lte('valid_from', endOfTargetDate),
+  ]);
+
+  const logsForSection3Raw = logsForSection3Result.data;
+  const doneHistoryRows = doneHistoryResult.data;
   const doneLogIds = Array.from(new Set((doneHistoryRows ?? []).map((r) => (r as { log_id: string }).log_id)));
+
+  const section1LogIds = new Set((taskLogs ?? []).map((l) => l.id));
+  const excludeFromSection3 = new Set([...section1LogIds, ...doneLogIds]);
+  const logsForSection3 = (logsForSection3Raw ?? []).filter(
+    (l) => !excludeFromSection3.has((l as { id: string }).id)
+  );
+  const section3Text = formatSection3Logs(logsForSection3 as unknown as LogForSection3[]);
   let completedItems: CompletedItem[] = [];
   if (doneLogIds.length > 0) {
     const { data: doneLogs } = await supabase

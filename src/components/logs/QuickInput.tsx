@@ -27,9 +27,10 @@ export function QuickInput() {
 
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: unknown) => {
       setText('');
-      toast.success('저장 완료');
+      const count = Array.isArray(data) ? data.length : 1;
+      toast.success(count > 1 ? `${count}건 저장 완료` : '저장 완료');
       queryClient.invalidateQueries({ queryKey: ['logs'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },

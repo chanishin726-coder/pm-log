@@ -33,9 +33,9 @@ export async function POST(req: Request) {
     .select('id, name, code')
     .eq('user_id', userId);
 
-  let parsed;
+  let items;
   try {
-    parsed = await parseLog(rawInput, projects || []);
+    items = await parseLog(rawInput, projects || []);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'AI 파싱 실패' },
@@ -43,58 +43,69 @@ export async function POST(req: Request) {
     );
   }
 
-  let project: { id: string } | null = null;
-  if (parsed.projectCode && projects && projects.length > 0) {
-    const found = projects.find((p) => p.code === parsed.projectCode);
-    if (!found) {
-      return NextResponse.json(
-        { error: `프로젝트 코드 '${parsed.projectCode}'를 찾을 수 없습니다.` },
-        { status: 400 }
-      );
+  const rows: Array<{
+    user_id: string;
+    project_id: string | null;
+    raw_input: string;
+    content: string;
+    log_type: string;
+    category_code: string | null;
+    keywords: string[] | null;
+    source: string | null;
+    task_id_tag: string | null;
+  }> = [];
+
+  const fromRawTag = rawInput?.trim() ? parseLogContent(rawInput.trim()).task_id_tag : null;
+
+  for (const item of items) {
+    let projectId: string | null = null;
+    if (item.projectCode && projects?.length) {
+      const found = projects.find((p) => p.code === item.projectCode);
+      if (!found) {
+        return NextResponse.json(
+          { error: `프로젝트 코드 '${item.projectCode}'를 찾을 수 없습니다.` },
+          { status: 400 }
+        );
+      }
+      projectId = found.id;
     }
-    project = found;
-  }
 
-  const parsedContent = parseLogContent(parsed.content);
-  const { source, content: bodyContent } = parsedContent;
-  let parsedTag: string | null = parsedContent.task_id_tag;
-  if (parsedTag == null && rawInput?.trim()) {
-    const fromRaw = parseLogContent(rawInput.trim());
-    if (fromRaw.task_id_tag) parsedTag = fromRaw.task_id_tag;
-  }
+    const parsedContent = parseLogContent(item.content);
+    const tag = parsedContent.task_id_tag ?? fromRawTag;
 
-  const { data: log, error } = await supabase
-    .from('logs')
-    .insert({
+    rows.push({
       user_id: userId,
-      project_id: project?.id ?? null,
+      project_id: projectId,
       raw_input: rawInput,
-      content: bodyContent,
-      log_type: parsed.logType,
-      category_code: parsed.categoryCode ?? null,
-      keywords: parsed.extractedKeywords ?? null,
-      source: source ?? null,
-      task_id_tag: parsedTag ?? null,
-    })
-    .select()
-    .single();
+      content: parsedContent.content,
+      log_type: item.logType,
+      category_code: item.categoryCode ?? null,
+      keywords: item.extractedKeywords ?? null,
+      source: parsedContent.source ?? null,
+      task_id_tag: tag ?? null,
+    });
+  }
+
+  const { data: logs, error } = await supabase.from('logs').insert(rows).select();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-  if (baseUrl) {
-    fetch(`${baseUrl}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logId: log.id }),
-    }).catch((err) => {
-      console.warn('[POST /api/logs] Embedding request failed for log', log.id, err);
-    });
+  if (baseUrl && Array.isArray(logs)) {
+    for (const log of logs) {
+      fetch(`${baseUrl}/api/embeddings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logId: log.id }),
+      }).catch((err) => {
+        console.warn('[POST /api/logs] Embedding request failed for log', log.id, err);
+      });
+    }
   }
 
-  return NextResponse.json(log);
+  return NextResponse.json(Array.isArray(logs) ? logs : []);
 }
 
 export async function GET(req: Request) {
@@ -118,9 +129,11 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '100', 10)), 500);
   const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
+  const listColumns =
+    'id, log_date, log_type, content, category_code, source, task_id_tag, task_state, created_at, project_id, project:projects(id, name, code)';
   let query = supabase
     .from('logs')
-    .select('*, project:projects(id, name, code)')
+    .select(listColumns)
     .eq('user_id', userId)
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })

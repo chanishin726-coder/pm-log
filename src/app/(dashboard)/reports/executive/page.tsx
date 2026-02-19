@@ -7,14 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, subDays } from 'date-fns';
+import { format, parseISO, subDays } from 'date-fns';
+import { getTodayKST } from '@/lib/utils/date';
 import { getApiErrorMessage } from '@/lib/api';
 
 export default function ExecutiveReportPage() {
   const [startDate, setStartDate] = useState(() =>
-    format(subDays(new Date(), 6), 'yyyy-MM-dd')
+    format(subDays(parseISO(getTodayKST()), 6), 'yyyy-MM-dd')
   );
-  const [endDate, setEndDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [endDate, setEndDate] = useState(() => getTodayKST());
   const [summary, setSummary] = useState('');
 
   const { mutate: runSummarize, isPending } = useMutation({

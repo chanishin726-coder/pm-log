@@ -45,7 +45,7 @@ export default async function DashboardPage() {
 
   const { data: recentLogs } = await supabase
     .from('logs')
-    .select('*, project:projects(id, name, code)')
+    .select('id, log_date, log_type, content, project:projects(id, name, code)')
     .eq('user_id', userId)
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })

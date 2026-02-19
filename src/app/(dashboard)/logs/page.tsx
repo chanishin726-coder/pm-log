@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { NO_PROJECT_FILTER_VALUE, NO_PROJECT_LABEL } from '@/lib/utils';
 import { getTaskState, getTaskStateLabel } from '@/lib/task-state';
 import type { Log } from '@/types/database';
+
+const LOGS_PAGE_SIZE = 50;
 
 export default function LogsPage() {
   const [projectId, setProjectId] = useState('');
@@ -28,10 +30,18 @@ export default function LogsPage() {
     },
   });
 
-  const { data: logs = [], isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ['logs', projectId, logType, keyword, taskIdTag, categoryCode, source],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams();
+      params.set('limit', String(LOGS_PAGE_SIZE));
+      params.set('offset', String(pageParam));
       if (projectId) params.set('projectId', projectId);
       if (logType) params.set('logType', logType);
       if (keyword) params.set('keyword', keyword);
@@ -42,7 +52,14 @@ export default function LogsPage() {
       if (!res.ok) throw new Error('Failed to fetch logs');
       return res.json();
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      (lastPage as Log[]).length === LOGS_PAGE_SIZE
+        ? allPages.length * LOGS_PAGE_SIZE
+        : undefined,
   });
+
+  const logs = (data?.pages ?? []).flat() as Log[];
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 sm:space-y-6">
@@ -117,8 +134,9 @@ export default function LogsPage() {
         ) : logs.length === 0 ? (
           <p className="text-muted-foreground text-sm">로그가 없습니다.</p>
         ) : (
+          <>
           <ul className="space-y-0 border rounded-lg divide-y overflow-hidden">
-            {(logs as Log[]).map((log) => {
+            {logs.map((log) => {
               const logWithState = log as Log & { task_state?: string | null };
               const hasTask = logWithState.task_state != null || log.task_id_tag != null;
               const taskState = hasTask ? getTaskState(logWithState) : null;
@@ -149,6 +167,19 @@ export default function LogsPage() {
               );
             })}
           </ul>
+          {hasNextPage && (
+            <div className="mt-3 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? '불러오는 중…' : '더 보기'}
+              </Button>
+            </div>
+          )}
+        </>
         )}
       </section>
     </div>
