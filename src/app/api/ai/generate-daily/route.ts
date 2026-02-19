@@ -117,7 +117,7 @@ export async function POST(req: Request) {
 
   const logIds = (taskLogs ?? []).map((l) => l.id).filter(Boolean);
   const endOfTargetDate = `${targetDate}T23:59:59.999Z`;
-  let effectiveStateByLogId: Record<string, string> = {};
+  const effectiveStateByLogId: Record<string, string> = {};
 
   if (logIds.length > 0) {
     const { data: historyRows } = await supabase
@@ -205,7 +205,7 @@ export async function POST(req: Request) {
       // 이미 task_id_tag가 있으면 덮어쓰지 않음(고유 ID 수동 지정 보존). task_state는 사용자만 수동 변경.
       await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', firstLogId).eq('user_id', userId).is('task_id_tag', null);
     } else {
-      const { data: newLog } = await supabase
+      await supabase
         .from('logs')
         .insert({
           user_id: userId,
@@ -216,9 +216,7 @@ export async function POST(req: Request) {
           log_type: 'I',
           task_id_tag: taskIdTag,
           no_task_needed: false,
-        })
-        .select('id')
-        .single();
+        });
       // task_state는 사용자만 수동 변경. 이력은 기록하지 않음.
     }
     for (const logId of nt.logIds ?? []) {
