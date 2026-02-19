@@ -51,7 +51,7 @@ type TaskForSection1 = {
 function buildReportSection12(tasks: TaskForSection1[]): string {
   const A = tasks.filter((t) => t.task_state === 'high');
   const B = tasks.filter((t) => t.task_state === 'medium');
-  const C = tasks.filter((t) => t.task_state === 'low' || t.task_state === 'review' || !t.task_state);
+  const C = tasks.filter((t) => t.task_state === 'low' || !t.task_state);
   const line = (t: TaskForSection1) => {
     const source = (t.source && t.source.trim()) ? t.source.trim() : '(없음)';
     const suffix = t.task_id_tag ? ` → ${t.task_id_tag}` : '';
@@ -67,6 +67,23 @@ function buildReportSection12(tasks: TaskForSection1[]): string {
 
 2. 일정
    - 없음`;
+}
+
+type CompletedItem = {
+  task_id_tag: string;
+  description: string;
+  source: string | null;
+};
+
+/** 4. 완료항목: 그날 완료 처리한 할일만. 형식은 1. 할일과 동일 */
+function buildReportSection4(items: CompletedItem[]): string {
+  if (items.length === 0) return '   - 없음';
+  const line = (t: CompletedItem) => {
+    const source = (t.source && t.source.trim()) ? t.source.trim() : '(없음)';
+    const suffix = t.task_id_tag ? ` → ${t.task_id_tag}` : '';
+    return `${source}: ${t.description}${suffix}`;
+  };
+  return items.map((t) => `   - ${line(t)}`).join('\n');
 }
 
 export async function POST(req: Request) {
@@ -127,24 +144,33 @@ export async function POST(req: Request) {
   if (logIds.length > 0) {
     const { data: historyRows } = await supabase
       .from('task_state_history')
-      .select('log_id, task_state, changed_at')
+      .select('log_id, task_state, valid_from, valid_to')
       .in('log_id', logIds)
-      .lte('changed_at', endOfTargetDate)
-      .order('changed_at', { ascending: false });
+      .lte('valid_from', endOfTargetDate);
 
-    const seen = new Set<string>();
-    for (const row of historyRows ?? []) {
-      const lid = (row as { log_id: string }).log_id;
-      if (!seen.has(lid)) {
-        seen.add(lid);
-        effectiveStateByLogId[lid] = (row as { task_state: string }).task_state;
-      }
-    }
+    const endTs = new Date(endOfTargetDate).getTime();
+    const validAtEnd = (rows: typeof historyRows) =>
+      (rows ?? []).filter(
+        (r) =>
+          (r as { valid_to?: string | null }).valid_to == null ||
+          new Date((r as { valid_to: string }).valid_to).getTime() > endTs
+      );
+    const byLogId = validAtEnd(historyRows).reduce<Record<string, { task_state: string; valid_from: string }>>(
+      (acc, r) => {
+        const lid = (r as { log_id: string }).log_id;
+        const vf = (r as { valid_from: string }).valid_from;
+        if (!acc[lid] || new Date(vf).getTime() > new Date(acc[lid].valid_from).getTime())
+          acc[lid] = { task_state: (r as { task_state: string }).task_state, valid_from: vf };
+        return acc;
+      },
+      {}
+    );
+    Object.assign(effectiveStateByLogId, Object.fromEntries(Object.entries(byLogId).map(([k, v]) => [k, v.task_state])));
   }
 
   const tasks = (taskLogs ?? [])
     .map((l) => {
-      const effectiveState = effectiveStateByLogId[l.id] ?? (l as { task_state?: string | null }).task_state ?? null;
+      const effectiveState = effectiveStateByLogId[l.id] ?? null;
       return {
         task_id_tag: l.task_id_tag ?? '',
         description: l.content ?? '',
@@ -154,7 +180,7 @@ export async function POST(req: Request) {
       };
     })
     .filter((t) => t.task_id_tag)
-    .filter((t) => t.task_state !== 'done');
+    .filter((t) => t.task_state != null && t.task_state !== 'done');
 
   const prevDate = new Date(targetDate);
   prevDate.setDate(prevDate.getDate() - 1);
@@ -252,8 +278,34 @@ export async function POST(req: Request) {
 
   const section3Text = formatSection3Logs((logsForSection3 ?? []) as unknown as LogForSection3[]);
 
+  // 4. 완료항목: 그날(valid_from이 그날인 done) 완료 처리한 할일만
+  const startOfTargetDate = `${targetDate}T00:00:00.000Z`;
+  const { data: doneHistoryRows } = await supabase
+    .from('task_state_history')
+    .select('log_id')
+    .eq('task_state', 'done')
+    .gte('valid_from', startOfTargetDate)
+    .lte('valid_from', endOfTargetDate);
+  const doneLogIds = Array.from(new Set((doneHistoryRows ?? []).map((r) => (r as { log_id: string }).log_id)));
+  let completedItems: CompletedItem[] = [];
+  if (doneLogIds.length > 0) {
+    const { data: doneLogs } = await supabase
+      .from('logs')
+      .select('id, content, task_id_tag, source')
+      .eq('user_id', userId)
+      .in('id', doneLogIds);
+    completedItems = (doneLogs ?? [])
+      .filter((l) => l.task_id_tag)
+      .map((l) => ({
+        task_id_tag: l.task_id_tag ?? '',
+        description: l.content ?? '',
+        source: (l as { source?: string | null }).source ?? null,
+      }));
+  }
+
   const section12 = buildReportSection12((tasks || []) as TaskForSection1[]);
-  const reportContentFinal = `${section12}\n\n3. 일지 및 소통 이력\n${section3Text}`;
+  const section4Text = buildReportSection4(completedItems);
+  const reportContentFinal = `${section12}\n\n3. 일지 및 소통 이력\n${section3Text}\n\n4. 완료항목\n${section4Text}`;
 
   const { data: report, error } = await supabase
     .from('daily_reports')

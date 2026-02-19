@@ -177,7 +177,7 @@ export async function generateDailyReport(data: {
   const tasksByPriority = {
     A: data.tasks.filter((t) => state(t) === 'high'),
     B: data.tasks.filter((t) => state(t) === 'medium'),
-    C: data.tasks.filter((t) => state(t) === 'low' || state(t) === 'review' || !state(t)),
+    C: data.tasks.filter((t) => state(t) === 'low' || !state(t)),
   };
   const tasksText = `
 A. 우선순위: ${tasksByPriority.A.length ? tasksByPriority.A.map((t) => `- [ ] ${t.task_id_tag} ${t.description}${t.due_date ? ` (마감: ${t.due_date})` : ''}`).join('\n') : '없음'}

@@ -284,7 +284,6 @@ export default function LogDetailPage() {
                 <option value="high">A 우선</option>
                 <option value="medium">B 후순위</option>
                 <option value="low">C 대기</option>
-                <option value="review">D AI추천</option>
                 <option value="done">X 완료</option>
               </select>
             </div>

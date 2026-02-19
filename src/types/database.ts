@@ -1,6 +1,7 @@
 /** F=수신, T=발신, W=실행(완료 기록|계획/할일), I=정보(정보 메모|이슈) */
 export type LogType = 'F' | 'T' | 'W' | 'I';
-export type TaskState = 'high' | 'medium' | 'low' | 'review' | 'done';
+/** 할일 상태. review 미사용. D AI 추천 = task_state null인 할일을 UI에서 필터로 표시 */
+export type TaskState = 'high' | 'medium' | 'low' | 'done';
 export type ProjectStatus = 'active' | 'completed' | 'hold';
 
 export interface Category {

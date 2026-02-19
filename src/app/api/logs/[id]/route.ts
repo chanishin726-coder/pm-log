@@ -90,10 +90,25 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (task_state !== undefined && previousTaskState !== task_state) {
+  if (task_state !== undefined && previousTaskState !== task_state && task_state != null) {
+    const now = new Date().toISOString();
+    const { data: openRow } = await supabase
+      .from('task_state_history')
+      .select('id')
+      .eq('log_id', id)
+      .is('valid_to', null)
+      .maybeSingle();
+    if (openRow?.id) {
+      await supabase
+        .from('task_state_history')
+        .update({ valid_to: now })
+        .eq('id', (openRow as { id: string }).id);
+    }
     await supabase.from('task_state_history').insert({
       log_id: id,
       task_state: task_state as string,
+      valid_from: now,
+      valid_to: null,
     });
   }
 

@@ -25,7 +25,7 @@ export async function PUT(
   }
   const parsedBody = updateTaskStateSchema.safeParse(body);
   if (!parsedBody.success) {
-    const msg = parsedBody.error.flatten().formErrors[0] || 'Invalid state. Use: null, high, medium, low, review, done';
+    const msg = parsedBody.error.flatten().formErrors[0] || 'Invalid state. Use: null, high, medium, low, done';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
   const newState = parsedBody.data.state;
@@ -50,9 +50,24 @@ export async function PUT(
   }
 
   if (newState !== previousState && newState != null) {
+    const now = new Date().toISOString();
+    const { data: openRow } = await supabase
+      .from('task_state_history')
+      .select('id')
+      .eq('log_id', id)
+      .is('valid_to', null)
+      .maybeSingle();
+    if (openRow?.id) {
+      await supabase
+        .from('task_state_history')
+        .update({ valid_to: now })
+        .eq('id', (openRow as { id: string }).id);
+    }
     await supabase.from('task_state_history').insert({
       log_id: id,
       task_state: newState,
+      valid_from: now,
+      valid_to: null,
     });
   }
 

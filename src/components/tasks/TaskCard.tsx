@@ -17,7 +17,6 @@ const STATE_LABELS: Record<TaskState, string> = {
   high: 'A',
   medium: 'B',
   low: 'C',
-  review: 'D',
   done: 'X',
 };
 
@@ -25,11 +24,10 @@ const BORDER_COLORS: Record<TaskState, string> = {
   high: 'border-l-red-500',
   medium: 'border-l-orange-500',
   low: 'border-l-green-500',
-  review: 'border-l-purple-500',
   done: 'border-l-slate-500',
 };
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, isReview }: TaskCardProps) {
   const queryClient = useQueryClient();
   const currentState = getTaskState(task);
 
@@ -53,7 +51,7 @@ export function TaskCard({ task }: TaskCardProps) {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const priorityColor = currentState ? BORDER_COLORS[currentState] : 'border-l-muted';
+  const priorityColor = isReview ? 'border-l-purple-500' : (currentState ? BORDER_COLORS[currentState] : 'border-l-muted');
   const dDay: number | null = task.due_date
     ? Math.ceil(
         (new Date(task.due_date).getTime() - new Date().getTime()) /

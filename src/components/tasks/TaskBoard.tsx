@@ -29,7 +29,8 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
   const highTasks = filterByState('high');
   const mediumTasks = filterByState('medium');
   const lowTasks = filterByState('low');
-  const reviewTasks = filterByState('review');
+  /** D AI 추천 = task_state null (미분류)인 할일. API가 이미 task_id_tag 있거나 no_task_needed false인 것만 반환하므로 null이면 해당 */
+  const reviewTasks = (tasks ?? []).filter((t: Task) => getTaskState(t) === null);
   const doneTasks = filterByState('done');
   const allTasksCount = tasks?.length ?? 0;
 

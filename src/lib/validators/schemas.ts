@@ -20,7 +20,7 @@ export const createLogSchema = z.object({
 });
 
 const logTypeEnum = z.enum(['F', 'T', 'W', 'I']);
-const taskStateEnum = z.enum(['high', 'medium', 'low', 'review', 'done']);
+const taskStateEnum = z.enum(['high', 'medium', 'low', 'done']);
 
 export const updateLogSchema = z.object({
   content: z.string().optional(),
@@ -41,7 +41,7 @@ export const createTaskSchema = z.object({
 });
 
 export const updateTaskStateSchema = z.object({
-  state: z.enum(['high', 'medium', 'low', 'review', 'done']).nullable(),
+  state: z.enum(['high', 'medium', 'low', 'done']).nullable(),
 });
 
 export const querySchema = z.object({
