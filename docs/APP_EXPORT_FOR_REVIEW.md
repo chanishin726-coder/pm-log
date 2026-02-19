@@ -61,10 +61,10 @@ src/
 | log_date | DATE | 로그 날짜 (수정 가능) |
 | raw_input | TEXT | 원문 |
 | content | TEXT | 정리된 본문 |
-| log_type | F/T/W/I | 수신/발신/실행/정보 |
+| log_type | F/T/W/I | 수신/발신/실행(완료 기록|계획·할일)/정보(정보 메모|이슈) |
 | category_code | TEXT? | H7, E9 등 |
 | keywords | TEXT[]? | AI 추출 키워드 |
-| **source** | TEXT? | 발신/대상 |
+| **source** | TEXT? | F/T=연락 상대(발신/대상), W=관련 당사자, I=정보 출처(없을 수 있음) |
 | **task_id_tag** | TEXT? | 할일 고유 ID (예: #서센26021615). **수동 지정 보존, null이 아닐 때 자동 덮어쓰기 금지** |
 | **task_state** | TEXT? | high/medium/low/review/done (A/B/C/D/X) |
 | **no_task_needed** | BOOLEAN? | null=미분류, true=할일 아님, false=할일로 봄 |

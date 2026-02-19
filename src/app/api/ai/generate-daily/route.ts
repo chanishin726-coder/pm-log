@@ -32,7 +32,7 @@ function formatSection3Logs(logs: LogForSection3[]): string {
       currentProject = proj;
       lines.push(proj);
     }
-    const source = (l.source && l.source.trim()) ? l.source.trim() : '(발신/대상 없음)';
+    const source = (l.source && l.source.trim()) ? l.source.trim() : '(없음)';
     const suffix = l.task_id_tag ? ` → ${l.task_id_tag}` : '';
     lines.push(` - [${l.log_type}] ${source}: ${l.content}${suffix}`);
   }
@@ -53,7 +53,7 @@ function buildReportSection12(tasks: TaskForSection1[]): string {
   const B = tasks.filter((t) => t.task_state === 'medium');
   const C = tasks.filter((t) => t.task_state === 'low' || t.task_state === 'review' || !t.task_state);
   const line = (t: TaskForSection1) => {
-    const source = (t.source && t.source.trim()) ? t.source.trim() : '(발신/대상 없음)';
+    const source = (t.source && t.source.trim()) ? t.source.trim() : '(없음)';
     const suffix = t.task_id_tag ? ` → ${t.task_id_tag}` : '';
     return `${source}: ${t.description}${suffix}${t.due_date ? ` (마감: ${t.due_date})` : ''}`;
   };

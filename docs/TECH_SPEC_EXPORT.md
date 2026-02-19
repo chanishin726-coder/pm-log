@@ -22,8 +22,8 @@
 |------|------|
 | log_date | 로그 날짜 (수정 가능) |
 | raw_input, content | 원문 / 정리 본문 |
-| log_type | F/T/W/I |
-| source | 발신/대상 |
+| log_type | F/T/W/I. W=실행(완료 기록|계획/할일), I=정보(정보 메모|이슈) |
+| source | F/T=연락 상대(발신/대상), W=관련 당사자, I=정보 출처(없을 수 있음) |
 | task_id_tag | 할일 고유 ID (#포함). 수동 지정 보존 |
 | task_state | high/medium/low/review/done |
 | no_task_needed | null=미분류, true=할일 아님, false=할일로 봄 |

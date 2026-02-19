@@ -1,3 +1,4 @@
+/** F=수신, T=발신, W=실행(완료 기록|계획/할일), I=정보(정보 메모|이슈) */
 export type LogType = 'F' | 'T' | 'W' | 'I';
 export type TaskState = 'high' | 'medium' | 'low' | 'review' | 'done';
 export type ProjectStatus = 'active' | 'completed' | 'hold';
@@ -32,6 +33,7 @@ export interface Log {
   keywords: string[] | null;
   task_id_tag: string | null;
   no_task_needed: boolean | null;
+  /** F=나에게 연락한 상대, T=내가 연락한 상대, W=관련 당사자(없을 수 있음), I=정보 출처(없을 수 있음) */
   source: string | null;
   task_state: TaskState | null;
   created_at: string;
@@ -54,7 +56,7 @@ export interface Task {
   ai_reason: string | null;
   sort_order: number;
   project?: { id: string; name: string; code: string } | null;
-  /** 발신/대상 (누구한테 받은·보낸 내용인지) */
+  /** F/T=연락 상대(발신/대상), W=관련 당사자, I=정보 출처 (없을 수 있음) */
   source?: string | null;
 }
 

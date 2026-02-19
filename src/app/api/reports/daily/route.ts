@@ -13,6 +13,18 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
+  const datesOnly = searchParams.get('dates') === '1';
+
+  if (datesOnly) {
+    const { data: rows, error } = await supabase
+      .from('daily_reports')
+      .select('report_date')
+      .eq('user_id', userId)
+      .order('report_date', { ascending: false });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const dates = (rows ?? []).map((r) => r.report_date as string).filter(Boolean);
+    return NextResponse.json(dates);
+  }
 
   if (!date) {
     return NextResponse.json({ error: 'date required' }, { status: 400 });

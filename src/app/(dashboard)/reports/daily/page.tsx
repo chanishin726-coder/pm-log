@@ -1,20 +1,50 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, FileText, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, FileText, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { getApiErrorMessage } from '@/lib/api';
 
 export default function DailyReportPage() {
   const queryClient = useQueryClient();
-  const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const [date, setDate] = useState('');
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
+  const dateInitialized = useRef(false);
+
+  const { data: reportDates = [] } = useQuery({
+    queryKey: ['dailyReportDates'],
+    queryFn: async () => {
+      const res = await fetch('/api/reports/daily?dates=1');
+      if (!res.ok) throw new Error('Failed to fetch dates');
+      return res.json() as Promise<string[]>;
+    },
+  });
+
+  useEffect(() => {
+    if (dateInitialized.current) return;
+    dateInitialized.current = true;
+    setDate(reportDates.length ? reportDates[0] : today);
+  }, [reportDates, today]);
+
+  const reportDateIndex = date ? reportDates.indexOf(date) : -1;
+  const hasPrev = reportDateIndex >= 0 && reportDateIndex < reportDates.length - 1;
+  const hasNext = reportDateIndex > 0;
+
+  const goPrev = () => {
+    if (!hasPrev) return;
+    setDate(reportDates[reportDateIndex + 1]);
+  };
+  const goNext = () => {
+    if (!hasNext) return;
+    setDate(reportDates[reportDateIndex - 1]);
+  };
 
   const { data: report, isLoading } = useQuery({
     queryKey: ['dailyReport', date],
@@ -24,6 +54,7 @@ export default function DailyReportPage() {
       if (!res.ok) throw new Error('Failed to fetch');
       return res.json();
     },
+    enabled: !!date,
   });
 
   const { mutate: generate, isPending: generating } = useMutation({
@@ -41,6 +72,7 @@ export default function DailyReportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dailyReport', date] });
+      queryClient.invalidateQueries({ queryKey: ['dailyReportDates'] });
       toast.success('일지가 생성되었습니다.');
     },
     onError: (e: Error) => toast.error(e.message),
@@ -94,8 +126,11 @@ export default function DailyReportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dailyReport', date] });
+      queryClient.invalidateQueries({ queryKey: ['dailyReportDates'] });
       toast.success('일지가 삭제되었습니다.');
       setEditing(false);
+      const remaining = reportDates.filter((d) => d !== date);
+      setDate(remaining.length ? remaining[0] : today);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -111,12 +146,36 @@ export default function DailyReportPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl sm:text-2xl font-semibold">업무 일지</h1>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <Input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full sm:w-40 min-h-[44px] sm:min-h-9"
-          />
+          <div className="flex items-center gap-0.5 w-full sm:w-auto">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0 min-h-[44px] sm:min-h-9 min-w-[44px] sm:min-w-9 rounded-r-none border-r-0"
+              onClick={goPrev}
+              disabled={!hasPrev}
+              aria-label="이전 일지"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full sm:w-40 min-h-[44px] sm:min-h-9 rounded-none border-x-0"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="shrink-0 min-h-[44px] sm:min-h-9 min-w-[44px] sm:min-w-9 rounded-l-none border-l-0"
+              onClick={goNext}
+              disabled={!hasNext}
+              aria-label="다음 일지"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
             onClick={() => generate()}
             disabled={generating}

@@ -15,6 +15,9 @@ export default function LogsPage() {
   const [projectId, setProjectId] = useState('');
   const [logType, setLogType] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [taskIdTag, setTaskIdTag] = useState('');
+  const [categoryCode, setCategoryCode] = useState('');
+  const [source, setSource] = useState('');
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -26,12 +29,15 @@ export default function LogsPage() {
   });
 
   const { data: logs = [], isLoading } = useQuery({
-    queryKey: ['logs', projectId, logType, keyword],
+    queryKey: ['logs', projectId, logType, keyword, taskIdTag, categoryCode, source],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (projectId) params.set('projectId', projectId);
       if (logType) params.set('logType', logType);
       if (keyword) params.set('keyword', keyword);
+      if (taskIdTag) params.set('taskIdTag', taskIdTag);
+      if (categoryCode) params.set('categoryCode', categoryCode);
+      if (source) params.set('source', source);
       const res = await fetch(`/api/logs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch logs');
       return res.json();
@@ -47,6 +53,24 @@ export default function LogsPage() {
           placeholder="키워드"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
+          className="w-full sm:w-36 min-h-[44px] sm:min-h-9"
+        />
+        <Input
+          placeholder="할일 태그 (task_id_tag)"
+          value={taskIdTag}
+          onChange={(e) => setTaskIdTag(e.target.value)}
+          className="w-full sm:w-36 min-h-[44px] sm:min-h-9"
+        />
+        <Input
+          placeholder="카테고리 코드"
+          value={categoryCode}
+          onChange={(e) => setCategoryCode(e.target.value)}
+          className="w-full sm:w-32 min-h-[44px] sm:min-h-9"
+        />
+        <Input
+          placeholder="발신/대상 (source)"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
           className="w-full sm:w-36 min-h-[44px] sm:min-h-9"
         />
         <select
@@ -75,7 +99,7 @@ export default function LogsPage() {
           variant="outline"
           size="sm"
           className="min-h-[44px] sm:min-h-9 w-full sm:w-auto"
-          onClick={() => { setProjectId(''); setLogType(''); setKeyword(''); }}
+          onClick={() => { setProjectId(''); setLogType(''); setKeyword(''); setTaskIdTag(''); setCategoryCode(''); setSource(''); }}
         >
           초기화
         </Button>

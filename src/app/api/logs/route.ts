@@ -112,6 +112,9 @@ export async function GET(req: Request) {
   const startDate = searchParams.get('startDate');
   const endDate = searchParams.get('endDate');
   const keyword = searchParams.get('keyword');
+  const taskIdTag = searchParams.get('taskIdTag');
+  const categoryCode = searchParams.get('categoryCode');
+  const source = searchParams.get('source');
   const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '100', 10)), 500);
   const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
@@ -132,6 +135,9 @@ export async function GET(req: Request) {
   if (startDate) query = query.gte('log_date', startDate);
   if (endDate) query = query.lte('log_date', endDate);
   if (keyword) query = query.contains('keywords', [keyword]);
+  if (taskIdTag?.trim()) query = query.ilike('task_id_tag', `%${taskIdTag.trim()}%`);
+  if (categoryCode?.trim()) query = query.ilike('category_code', `%${categoryCode.trim()}%`);
+  if (source?.trim()) query = query.ilike('source', `%${source.trim()}%`);
 
   const { data, error } = await query;
 
