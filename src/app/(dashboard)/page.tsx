@@ -65,14 +65,18 @@ export default async function DashboardPage() {
         <h2 className="text-base sm:text-lg font-medium mb-2">최근 로그</h2>
         {recentLogs && recentLogs.length > 0 ? (
           <ul className="space-y-0 border rounded-lg divide-y overflow-hidden">
-            {recentLogs.map((log) => (
-              <li key={log.id} className="px-3 sm:px-4 py-3 flex flex-wrap gap-x-2 gap-y-1 text-sm min-h-[48px] items-center">
-                <span className="text-muted-foreground shrink-0">{log.log_date}</span>
-                <span className="font-mono text-xs shrink-0">{log.log_type}</span>
-                <span className="shrink-0">{log.project?.name || '-'}</span>
-                <span className="truncate min-w-0">{log.content}</span>
-              </li>
-            ))}
+            {recentLogs.map((log) => {
+              const rawProject = (log as { project?: ProjectShape | ProjectShape[] }).project;
+              const project = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
+              return (
+                <li key={log.id} className="px-3 sm:px-4 py-3 flex flex-wrap gap-x-2 gap-y-1 text-sm min-h-[48px] items-center">
+                  <span className="text-muted-foreground shrink-0">{log.log_date}</span>
+                  <span className="font-mono text-xs shrink-0">{log.log_type}</span>
+                  <span className="shrink-0">{project?.name || '-'}</span>
+                  <span className="truncate min-w-0">{log.content}</span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p className="text-muted-foreground text-sm">최근 로그가 없습니다.</p>
