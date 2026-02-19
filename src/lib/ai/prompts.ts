@@ -1,6 +1,6 @@
 import type { Project } from '@/types/database';
 
-export const PARSE_LOG_PROMPT = (projects: Project[]) => `
+export const PARSE_LOG_PROMPT = (projects: Pick<Project, 'code' | 'name'>[]) => `
 당신은 부동산 PM 업무 로그를 파싱하는 전문가입니다.
 
 ## 입력 형식

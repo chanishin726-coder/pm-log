@@ -61,7 +61,7 @@ export interface ParsedLog {
 
 export async function parseLog(
   rawInput: string,
-  projects: Project[]
+  projects: Pick<Project, 'code' | 'name'>[]
 ): Promise<ParsedLog> {
   const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
   const prompt = PARSE_LOG_PROMPT(projects) + `\n\n입력: ${rawInput}`;
