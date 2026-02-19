@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
-import { logToTaskShape, normalizeProject } from '@/lib/task-from-log';
+import { logToTaskShape, normalizeProject, type LogRowForTaskShape } from '@/lib/task-from-log';
 import { createTaskSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 import type { Task } from '@/types/database';
@@ -139,6 +139,6 @@ export async function POST(req: Request) {
   }
 
   const normalized = normalizeProject(log);
-  const task = logToTaskShape(normalized);
+  const task = logToTaskShape(normalized as LogRowForTaskShape);
   return NextResponse.json(task ?? normalized);
 }
