@@ -44,15 +44,19 @@ type TaskForSection1 = {
   description: string;
   task_state: string | null;
   due_date: string | null;
+  source: string | null;
 };
 
-/** 1. 할일, 2. 일정 절만 서버에서 생성 (AI 토큰 절약) */
+/** 1. 할일, 2. 일정 절만 서버에서 생성 (AI 토큰 절약). 할일 줄: source: 내용 → #태그 (3. 일지와 동일한 톤) */
 function buildReportSection12(tasks: TaskForSection1[]): string {
   const A = tasks.filter((t) => t.task_state === 'high');
   const B = tasks.filter((t) => t.task_state === 'medium');
   const C = tasks.filter((t) => t.task_state === 'low' || t.task_state === 'review' || !t.task_state);
-  const line = (t: TaskForSection1) =>
-    `- [ ] ${t.task_id_tag} ${t.description}${t.due_date ? ` (마감: ${t.due_date})` : ''}`;
+  const line = (t: TaskForSection1) => {
+    const source = (t.source && t.source.trim()) ? t.source.trim() : '(발신/대상 없음)';
+    const suffix = t.task_id_tag ? ` → ${t.task_id_tag}` : '';
+    return `${source}: ${t.description}${suffix}${t.due_date ? ` (마감: ${t.due_date})` : ''}`;
+  };
   return `1. 할일
    A. 우선순위
    ${A.length ? A.map(line).join('\n   ') : '없음'}
@@ -106,12 +110,13 @@ export async function POST(req: Request) {
     .filter((l) => recentDates.includes(l.log_date))
     .sort((a, b) => (a.log_date !== b.log_date ? a.log_date.localeCompare(b.log_date) : (a.created_at ?? '').localeCompare(b.created_at ?? '')));
 
-  // 할일 = logs (task_state 또는 task_id_tag 있는 것). report_date 기준 task_state_history에서 당시 상태 조회.
+  // 할일 = report_date 이전/당일 존재한 로그만. task_state_history에서 report_date 끝 시점 상태 사용.
   const { data: taskLogs } = await supabase
     .from('logs')
-    .select('id, task_id_tag, content, task_state, project:projects(name, code)')
+    .select('id, task_id_tag, content, task_state, source, project:projects(name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
+    .lte('log_date', targetDate)
     .or('task_state.not.is.null,task_id_tag.not.is.null')
     .order('created_at', { ascending: true });
 
@@ -145,6 +150,7 @@ export async function POST(req: Request) {
         description: l.content ?? '',
         task_state: effectiveState,
         due_date: null as string | null,
+        source: (l as { source?: string | null }).source ?? null,
       };
     })
     .filter((t) => t.task_id_tag)
@@ -187,6 +193,9 @@ export async function POST(req: Request) {
   const { logAssignments, newTasks } = result;
   const logIdsThisDay = new Set(logs.map((l) => l.id));
 
+  // task_id_tag는 당일 로그(3. 일지 및 소통 이력에만 나오는 로그)에만 부여. AI가 다른 id를 반환해도 무시.
+  const assignmentsThisDay = (logAssignments ?? []).filter((a) => logIdsThisDay.has(a.logId));
+
   for (const nt of newTasks) {
     const { data: proj } = await supabase
       .from('projects')
@@ -226,8 +235,7 @@ export async function POST(req: Request) {
     }
   }
 
-  for (const a of logAssignments) {
-    if (!logIdsThisDay.has(a.logId)) continue;
+  for (const a of assignmentsThisDay) {
     if (a.taskIdTag != null) {
       // 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
       await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('id', a.logId).eq('user_id', userId).is('task_id_tag', null);
