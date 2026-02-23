@@ -20,7 +20,7 @@ export async function GET(
   const { data, error } = await supabase
     .from('projects')
     .select('*')
-    .eq('id', id)
+    .eq('projects_id', id)
     .eq('user_id', userId)
     .single();
 
@@ -66,7 +66,7 @@ export async function PUT(
   const { data, error } = await supabase
     .from('projects')
     .update(update)
-    .eq('id', id)
+    .eq('projects_id', id)
     .eq('user_id', userId)
     .select()
     .single();
@@ -95,7 +95,7 @@ export async function DELETE(
   const { error } = await supabase
     .from('projects')
     .delete()
-    .eq('id', id)
+    .eq('projects_id', id)
     .eq('user_id', userId);
 
   if (error) {

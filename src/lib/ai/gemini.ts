@@ -88,7 +88,7 @@ export interface TaskClassifyResult {
 /** 로그 목록에 대해 "할일로 볼 것인지"만 판단. 우선순위·상태는 판단하지 않음. */
 export async function classifyLogsAsTask(data: {
   logs: Array<{
-    id: string;
+    log_id: string;
     log_date: string;
     log_type: string;
     content: string;
@@ -100,7 +100,7 @@ export async function classifyLogsAsTask(data: {
   const prompt = `${TASK_CLASSIFY_PROMPT}
 
 ## 아래 로그 목록 (각 줄의 id가 로그 uuid)
-${data.logs.map((l) => `id: ${l.id} | [${l.log_date}] [${l.log_type}] ${l.project?.name || '기타'}: ${l.content}`).join('\n')}
+${data.logs.map((l) => `id: ${l.log_id} | [${l.log_date}] [${l.log_type}] ${l.project?.name || '기타'}: ${l.content}`).join('\n')}
 
 위 목록의 각 로그에 대해 할일 여부(isTask)만 판단하여 JSON으로 응답하세요.
 `;
@@ -118,12 +118,12 @@ ${data.logs.map((l) => `id: ${l.id} | [${l.log_date}] [${l.log_type}] ${l.projec
 
 export interface DailyReportResult {
   logAssignments: Array<{ logId: string; taskIdTag: string | null }>;
-  newTasks: Array<{ description: string; projectCode: string; priority: string; logIds: string[] }>;
+  newTasks: Array<{ logIds: string[] }>;
 }
 
 export async function generateDailyReport(data: {
   logs: Array<{
-    id: string;
+    log_id: string;
     log_date?: string;
     log_type: string;
     content: string;
@@ -133,7 +133,7 @@ export async function generateDailyReport(data: {
     project?: { name: string; code: string } | null;
   }>;
   recentLogs?: Array<{
-    id: string;
+    log_id: string;
     log_date: string;
     log_type: string;
     content: string;
@@ -160,7 +160,7 @@ export async function generateDailyReport(data: {
     .map((l) => {
       const cat = l.parent_groups?.trim() ? ` ${l.parent_groups}` : '';
       const src = l.source?.trim() ? ` source=${JSON.stringify(l.source)}` : '';
-      return `id: ${l.id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}`;
+      return `id: ${l.log_id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}`;
     })
     .join('\n');
 
@@ -171,7 +171,7 @@ export async function generateDailyReport(data: {
             const cat = l.parent_groups?.trim() ? ` ${l.parent_groups}` : '';
             const tag = l.task_id_tag ? ` (기존ID: ${l.task_id_tag})` : '';
             const src = l.source?.trim() ? ` source=${JSON.stringify(l.source)}` : '';
-            return `${l.log_date} | id: ${l.id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}${tag}`;
+            return `${l.log_date} | id: ${l.log_id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}${tag}`;
           })
           .join('\n')
       : '';
@@ -219,10 +219,11 @@ ${data.previousReport ? `## 전일 일지 (참고용)\n${data.previousReport}\n`
       const jsonStr = assignmentsMatch[1].replace(/\s*\/\/.*$/gm, '').trim();
       const parsed = safeParseJson<{
         logAssignments?: Array<{ logId: string; taskIdTag: string | null }>;
-        newTasks?: Array<{ description: string; projectCode: string; priority: string; logIds: string[] }>;
+        newTasks?: Array<{ logIds?: string[] }>;
       }>(jsonStr);
       if (Array.isArray(parsed.logAssignments)) logAssignments = parsed.logAssignments;
-      if (Array.isArray(parsed.newTasks)) newTasks = parsed.newTasks;
+      if (Array.isArray(parsed.newTasks))
+        newTasks = parsed.newTasks.filter((t) => Array.isArray(t.logIds) && t.logIds.length > 0).map((t) => ({ logIds: t.logIds! }));
     } catch {
       // JSON 파싱 실패 시 빈 배열
     }

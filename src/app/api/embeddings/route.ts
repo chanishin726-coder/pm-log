@@ -26,8 +26,8 @@ export async function POST(req: Request) {
 
   const { data: log, error: logError } = await supabase
     .from('logs')
-    .select('id, content')
-    .eq('id', logId)
+    .select('log_id, content')
+    .eq('log_id', logId)
     .eq('user_id', userId)
     .single();
 
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
   const { data: existing } = await supabase
     .from('log_embeddings')
-    .select('id')
+    .select('log_embeddings_id')
     .eq('log_id', logId)
     .limit(1)
     .single();

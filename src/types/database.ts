@@ -5,7 +5,7 @@ export type TaskState = 'high' | 'medium' | 'low' | 'done';
 export type ProjectStatus = 'active' | 'completed' | 'hold';
 
 export interface Category {
-  id: number;
+  categories_id: number;
   code: string;
   name: string;
   /** 업무영역(표시용): 개발기획, 사업총괄, 재무관리, 설계관리, 공사관리, 사업관리, 기타 */
@@ -13,7 +13,7 @@ export interface Category {
 }
 
 export interface Project {
-  id: string;
+  projects_id: string;
   user_id: string;
   name: string;
   code: string;
@@ -24,7 +24,8 @@ export interface Project {
 }
 
 export interface Log {
-  id: string;
+  /** 로그 고유 식별자(UUID). 다른 테이블/API의 "log id"는 이 값을 의미한다. */
+  log_id: string;
   user_id: string;
   project_id: string | null;
   log_date: string;
@@ -40,7 +41,7 @@ export interface Log {
   task_state: TaskState | null;
   created_at: string;
   updated_at: string;
-  project?: { id: string; name: string; code: string } | null;
+  project?: { projects_id: string; name: string; code: string } | null;
 }
 
 export interface Task {
@@ -57,13 +58,13 @@ export interface Task {
   ai_recommended: boolean;
   ai_reason: string | null;
   sort_order: number;
-  project?: { id: string; name: string; code: string } | null;
+  project?: { projects_id: string; name: string; code: string } | null;
   /** F/T=연락 상대(출처/대상), W=관련 당사자, I=정보 출처 (없을 수 있음) */
   source?: string | null;
 }
 
 export interface DailyReport {
-  id: string;
+  daily_reports_id: string;
   user_id: string;
   report_date: string;
   content: string;

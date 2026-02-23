@@ -46,15 +46,15 @@ export async function POST(req: Request) {
   if (!logs || logs.length === 0) {
     const { data: userLogs } = await supabase
       .from('logs')
-      .select('id')
+      .select('log_id')
       .eq('user_id', userId)
       .limit(5000);
-    const logIds = userLogs?.map((l) => l.id) ?? [];
+    const logIds = userLogs?.map((l) => l.log_id) ?? [];
     let hasAnyEmbeddings = false;
     if (logIds.length > 0) {
       const { count } = await supabase
         .from('log_embeddings')
-        .select('id', { count: 'exact', head: true })
+        .select('log_embeddings_id', { count: 'exact', head: true })
         .in('log_id', logIds);
       hasAnyEmbeddings = (count ?? 0) > 0;
     }

@@ -21,16 +21,16 @@ export async function POST() {
   // (1) 프로젝트: project_id가 null인 로그에 raw_input에서 프로젝트 코드 매칭
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, code')
+    .select('projects_id, code')
     .eq('user_id', userId);
 
   if (projects?.length) {
     const codes = projects.map((p) => p.code);
-    const codeToId = new Map(projects.map((p) => [p.code, p.id]));
+    const codeToId = new Map(projects.map((p) => [p.code, p.projects_id]));
 
     const { data: logsNoProject } = await supabase
       .from('logs')
-      .select('id, raw_input')
+      .select('log_id, raw_input')
       .eq('user_id', userId)
       .is('project_id', null);
 
@@ -43,7 +43,7 @@ export async function POST() {
       const { error } = await supabase
         .from('logs')
         .update({ project_id: projectId })
-        .eq('id', log.id)
+        .eq('log_id', log.log_id)
         .eq('user_id', userId);
 
       if (!error) projectUpdated++;
@@ -53,7 +53,7 @@ export async function POST() {
   // (2) task_id_tag: task_id_tag가 null인 로그에 raw_input 끝 #태그 반영
   const { data: logsNoTag } = await supabase
     .from('logs')
-    .select('id, raw_input')
+    .select('log_id, raw_input')
     .eq('user_id', userId)
     .is('task_id_tag', null);
 
@@ -64,7 +64,7 @@ export async function POST() {
     const { error } = await supabase
       .from('logs')
       .update({ task_id_tag: tag })
-      .eq('id', log.id)
+      .eq('log_id', log.log_id)
       .eq('user_id', userId);
 
     if (!error) taskIdTagUpdated++;

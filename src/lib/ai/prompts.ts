@@ -122,7 +122,7 @@ export const GENERATE_DAILY_PROMPT = `
 - I는 (1) 정보 메모(사실 기록) → 후속 불필요 (2) 이슈(문제 발생, 확인 필요) → 후속 필요.
 
 ## 판단 기준
-- **후속조치 필요** → 기존 할일 목록의 task_id_tag에 묶거나, newTasks로 새 할일 생성 후 logIds에 해당 로그 id 포함.
+- **후속조치 필요** → 기존 할일 목록의 task_id_tag에 묶거나, newTasks로 새 할일 생성 후 logIds에 해당 로그 id(logs 테이블의 id) 포함.
 - **기존 task_id_tag에 묶을 때**: 당일 로그가 그 할일과 **같은 업무 건**일 때만 해당 태그 사용. 다음 **3가지 중 2가지 이상** 충족해야 기존 태그 사용 가능:
   ① 동일 당사자(같은 사람/업체와의 건)
   ② 동일 사안(같은 공사, 같은 계약, 같은 요청 건)
@@ -147,17 +147,16 @@ export const GENERATE_DAILY_PROMPT = `
     { "logId": "당일로그uuid", "taskIdTag": null }
   ],
   "newTasks": [
-    { "description": "한 줄 설명", "projectCode": "서센", "priority": "high", "logIds": ["로그uuid1", "로그uuid2"] }
+    { "logIds": ["당일로그uuid1", "당일로그uuid2"] }
   ]
 }
 [/ASSIGNMENTS]
 
 ## 규칙
-- logAssignments: **당일 로그**만 한 건씩. 제공된 당일 로그 id만 사용.
+- logAssignments: **당일 로그**만 한 건씩. 제공된 당일 로그 id(logs 테이블의 id)만 사용.
 - **taskIdTag는 반드시 제공된 할일 목록에 나온 태그만 사용.** 목록에 없는 태그는 절대 사용하지 말 것. 새 태그를 만들어 logAssignments에 넣지 말 것.
-- **신규 할일**이면 **newTasks에만** 넣고(description, projectCode, priority, logIds). 서버가 태그를 생성해 부여함. logAssignments에는 해당 로그를 새 태그로 넣지 말 것.
+- **신규 할일**이면 **newTasks에 logIds만** 넣는다. 서버가 해당 로그의 프로젝트(DB의 project_id; null이면 코드 '기타')를 보고 태그를 생성·부여함. logAssignments에는 해당 로그를 새 태그로 넣지 말 것.
 - **기존 task_id_tag 사용 조건**: ① 동일 당사자 ② 동일 사안 ③ 선후관계 중 2가지 이상 충족할 때만. **애매하면 반드시 null 또는 newTasks로 두고, 기존 태그에 묶지 않음.**
-- newTasks의 projectCode는 등록된 프로젝트 code만. "기타"는 projectCode 사용 금지(표시용 라벨).
 `;
 
 export const EXECUTIVE_SUMMARY_PROMPT = `

@@ -19,7 +19,7 @@ export async function POST() {
 
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, code')
+    .select('projects_id, code')
     .eq('user_id', userId);
 
   if (!projects?.length) {
@@ -27,11 +27,11 @@ export async function POST() {
   }
 
   const codes = projects.map((p) => p.code);
-  const codeToId = new Map(projects.map((p) => [p.code, p.id]));
+  const codeToId = new Map(projects.map((p) => [p.code, p.projects_id]));
 
   const { data: logs } = await supabase
     .from('logs')
-    .select('id, raw_input')
+    .select('log_id, raw_input')
     .eq('user_id', userId)
     .is('project_id', null);
 
@@ -45,7 +45,7 @@ export async function POST() {
     const { error } = await supabase
       .from('logs')
       .update({ project_id: projectId })
-      .eq('id', log.id)
+      .eq('log_id', log.log_id)
       .eq('user_id', userId);
 
     if (!error) updated++;

@@ -120,7 +120,7 @@ export default function LogsPage() {
           <option value="">전체 프로젝트</option>
           <option value={NO_PROJECT_FILTER_VALUE}>{NO_PROJECT_LABEL}</option>
           {(projects as { id: string; name: string }[]).map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+            <option key={p.projects_id} value={p.projects_id}>{p.name}</option>
           ))}
         </select>
         <select
@@ -163,8 +163,8 @@ export default function LogsPage() {
               const hasTask = logWithState.task_state != null || log.task_id_tag != null;
               const taskState = hasTask ? getTaskState(logWithState) : null;
               return (
-                <li key={log.id} className="p-3 sm:p-4 hover:bg-muted/50 active:bg-muted/70 min-h-[52px] flex items-center">
-                  <Link href={`/logs/${log.id}`} className="block w-full">
+                <li key={log.log_id} className="p-3 sm:p-4 hover:bg-muted/50 active:bg-muted/70 min-h-[52px] flex items-center">
+                  <Link href={`/logs/${log.log_id}`} className="block w-full">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-muted-foreground text-sm">{log.log_date}</span>
                       <Badge variant="secondary" className="font-mono text-xs">

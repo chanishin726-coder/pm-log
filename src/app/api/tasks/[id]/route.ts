@@ -20,8 +20,8 @@ export async function GET(
 
   const { data: log, error } = await supabase
     .from('logs')
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
-    .eq('id', id)
+    .select('log_id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(projects_id, name, code)')
+    .eq('log_id', id)
     .eq('user_id', userId)
     .single();
 
@@ -71,8 +71,8 @@ export async function PUT(
   if (Object.keys(update).length === 0) {
     const { data: log } = await supabase
       .from('logs')
-      .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
-      .eq('id', id)
+      .select('log_id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(projects_id, name, code)')
+      .eq('log_id', id)
       .eq('user_id', userId)
       .single();
     if (!log) {
@@ -87,7 +87,7 @@ export async function PUT(
     const { data: existing } = await supabase
       .from('logs')
       .select('task_state')
-      .eq('id', id)
+      .eq('log_id', id)
       .eq('user_id', userId)
       .single();
     previousTaskState = (existing as { task_state?: string | null } | null)?.task_state ?? null;
@@ -96,9 +96,9 @@ export async function PUT(
   const { data: log, error } = await supabase
     .from('logs')
     .update(update)
-    .eq('id', id)
+    .eq('log_id', id)
     .eq('user_id', userId)
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
+    .select('log_id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(projects_id, name, code)')
     .single();
 
   if (error) {
@@ -138,7 +138,7 @@ export async function DELETE(
   const { error } = await supabase
     .from('logs')
     .delete()
-    .eq('id', id)
+    .eq('log_id', id)
     .eq('user_id', userId);
 
   if (error) {

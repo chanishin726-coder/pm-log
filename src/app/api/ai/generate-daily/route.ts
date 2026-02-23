@@ -109,7 +109,7 @@ export async function POST(req: Request) {
 
   const { data: logs } = await supabase
     .from('logs')
-    .select('id, log_date, log_type, content, category_codes, source, created_at, project:projects(id, name, code)')
+    .select('log_id, log_date, log_type, content, category_codes, source, created_at, project:projects(projects_id, name, code)')
     .eq('user_id', userId)
     .eq('log_date', targetDate)
     .order('created_at', { ascending: true });
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
   const [recentResult, taskLogsResult, prevReportResult] = await Promise.all([
     supabase
       .from('logs')
-      .select('id, log_date, log_type, content, category_codes, source, task_id_tag, created_at, project:projects(id, name, code)')
+      .select('log_id, log_date, log_type, content, category_codes, source, task_id_tag, created_at, project:projects(projects_id, name, code)')
       .eq('user_id', userId)
       .lt('log_date', targetDate)
       .order('log_date', { ascending: false })
@@ -136,7 +136,7 @@ export async function POST(req: Request) {
       .limit(200),
     supabase
       .from('logs')
-      .select('id, task_id_tag, content, task_state, source, project:projects(name, code)')
+      .select('log_id, task_id_tag, content, task_state, source, project:projects(name, code)')
       .eq('user_id', userId)
       .not('project_id', 'is', null)
       .lte('log_date', targetDate)
@@ -159,7 +159,7 @@ export async function POST(req: Request) {
   const taskLogs = taskLogsResult.data;
   const prevReport = prevReportResult.data;
 
-  const logIds = (taskLogs ?? []).map((l) => l.id).filter(Boolean);
+  const logIds = (taskLogs ?? []).map((l) => l.log_id).filter(Boolean);
   const endOfTargetDate = `${targetDate}T23:59:59.999Z`;
   const effectiveStateByLogId: Record<string, string> = {};
 
@@ -192,7 +192,7 @@ export async function POST(req: Request) {
 
   const tasks = (taskLogs ?? [])
     .map((l) => {
-      const effectiveState = effectiveStateByLogId[l.id] ?? null;
+      const effectiveState = effectiveStateByLogId[l.log_id] ?? null;
       return {
         task_id_tag: l.task_id_tag ?? '',
         description: l.content ?? '',
@@ -231,7 +231,7 @@ export async function POST(req: Request) {
     parent_groups: toParentGroups(l.category_codes),
   }));
 
-  let result: { logAssignments: Array<{ logId: string; taskIdTag: string | null }>; newTasks: Array<{ description: string; projectCode: string; priority: string; logIds: string[] }> };
+  let result: { logAssignments: Array<{ logId: string; taskIdTag: string | null }>; newTasks: Array<{ logIds: string[] }> };
   try {
     result = await generateDailyReport({
       logs: logsWithGroups as unknown as Parameters<typeof generateDailyReport>[0]['logs'],
@@ -248,56 +248,33 @@ export async function POST(req: Request) {
   }
 
   const { logAssignments, newTasks } = result;
-  const logIdsThisDay = new Set(logs.map((l) => l.id));
+  const logIdsThisDay = new Set(logs.map((l) => l.log_id));
 
   // logAssignments에 허용할 task_id_tag: 제공한 할일 목록 + 이번에 newTasks로 생성한 태그만.
   const allowedTaskIdTags = new Set(tasks.map((t) => t.task_id_tag).filter(Boolean));
   const assignmentsThisDay = (logAssignments ?? []).filter((a) => logIdsThisDay.has(a.logId));
 
   for (const nt of newTasks) {
-    const { data: proj } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('code', nt.projectCode)
-      .single();
-    if (!proj) continue;
+    const validLogIds = (nt.logIds ?? []).filter((id) => logIdsThisDay.has(id));
+    if (validLogIds.length === 0) continue;
+    const firstLog = logs?.find((l) => l.log_id === validLogIds[0]);
+    const p = firstLog && (firstLog as { project?: { code?: string } | { code?: string }[] }).project;
+    const projectCode = (Array.isArray(p) ? p[0] : p)?.code ?? '기타';
     const { data: tag } = await supabase.rpc('generate_task_id', {
-      p_project_code: nt.projectCode,
+      p_project_code: projectCode,
       p_date: targetDate,
     });
-    const taskIdTag = (tag as string) ?? `#${nt.projectCode}-${targetDate.replace(/-/g, '')}-99`;
+    const taskIdTag = (tag as string) ?? `#${projectCode}-${targetDate.replace(/-/g, '')}-99`;
     allowedTaskIdTags.add(taskIdTag);
-    const firstLogId = nt.logIds?.[0];
-    if (firstLogId && logIdsThisDay.has(firstLogId)) {
-      // 이미 task_id_tag가 있으면 덮어쓰지 않음(고유 ID 수동 지정 보존). task_state는 사용자만 수동 변경.
-      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', firstLogId).eq('user_id', userId).is('task_id_tag', null);
-    } else {
-      await supabase
-        .from('logs')
-        .insert({
-          user_id: userId,
-          project_id: proj.id,
-          log_date: targetDate,
-          raw_input: nt.description,
-          content: nt.description,
-          log_type: 'I',
-          task_id_tag: taskIdTag,
-          no_task_needed: false,
-        });
-      // task_state는 사용자만 수동 변경. 이력은 기록하지 않음.
-    }
-    for (const logId of nt.logIds ?? []) {
-      if (!logIdsThisDay.has(logId)) continue;
-      // 이미 task_id_tag가 있으면 덮어쓰지 않음
-      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('id', logId).eq('user_id', userId).is('task_id_tag', null);
+    for (const logId of validLogIds) {
+      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('log_id', logId).eq('user_id', userId).is('task_id_tag', null);
     }
   }
 
   for (const a of assignmentsThisDay) {
     if (a.taskIdTag != null && allowedTaskIdTags.has(a.taskIdTag)) {
       // 허용된 태그만 적용. 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
-      await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('id', a.logId).eq('user_id', userId).is('task_id_tag', null);
+      await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('log_id', a.logId).eq('user_id', userId).is('task_id_tag', null);
     }
   }
 
@@ -306,7 +283,7 @@ export async function POST(req: Request) {
   const [logsForSection3Result, doneHistoryResult] = await Promise.all([
     supabase
       .from('logs')
-      .select('id, log_type, content, source, task_id_tag, created_at, project:projects(name)')
+      .select('log_id, log_type, content, source, task_id_tag, created_at, project:projects(name)')
       .eq('user_id', userId)
       .eq('log_date', targetDate)
       .order('created_at', { ascending: true }),
@@ -322,19 +299,19 @@ export async function POST(req: Request) {
   const doneHistoryRows = doneHistoryResult.data;
   const doneLogIds = Array.from(new Set((doneHistoryRows ?? []).map((r) => (r as { log_id: string }).log_id)));
 
-  const section1LogIds = new Set((taskLogs ?? []).map((l) => l.id));
+  const section1LogIds = new Set((taskLogs ?? []).map((l) => l.log_id));
   const excludeFromSection3 = new Set([...section1LogIds, ...doneLogIds]);
   const logsForSection3 = (logsForSection3Raw ?? []).filter(
-    (l) => !excludeFromSection3.has((l as { id: string }).id)
+    (l) => !excludeFromSection3.has((l as { log_id: string }).log_id)
   );
   const section3Text = formatSection3Logs(logsForSection3 as unknown as LogForSection3[]);
   let completedItems: CompletedItem[] = [];
   if (doneLogIds.length > 0) {
     const { data: doneLogs } = await supabase
       .from('logs')
-      .select('id, content, task_id_tag, source')
+      .select('log_id, content, task_id_tag, source')
       .eq('user_id', userId)
-      .in('id', doneLogIds);
+      .in('log_id', doneLogIds);
     completedItems = (doneLogs ?? [])
       .filter((l) => l.task_id_tag)
       .map((l) => ({

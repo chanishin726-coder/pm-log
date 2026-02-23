@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
   const { data: logs } = await supabase
     .from('logs')
-    .select('id, content')
+    .select('log_id, content')
     .eq('user_id', userId)
     .order('log_date', { ascending: false })
     .limit(500);
@@ -33,13 +33,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ created: 0, remaining: 0 });
   }
 
-  const logIds = logs.map((l) => l.id);
+  const logIds = logs.map((l) => l.log_id);
   const { data: existing } = await supabase
     .from('log_embeddings')
     .select('log_id')
     .in('log_id', logIds);
   const hasEmbedding = new Set((existing ?? []).map((r) => r.log_id));
-  const missingAll = logs.filter((l) => !hasEmbedding.has(l.id));
+  const missingAll = logs.filter((l) => !hasEmbedding.has(l.log_id));
   const toProcess = missingAll.slice(0, limit);
 
   let created = 0;
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     try {
       const values = await generateEmbedding(log.content);
       const { error } = await supabase.from('log_embeddings').insert({
-        log_id: log.id,
+        log_id: log.log_id,
         embedding: values,
         content_chunk: log.content,
       });

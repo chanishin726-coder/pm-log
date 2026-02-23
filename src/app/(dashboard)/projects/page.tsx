@@ -100,7 +100,7 @@ export default function ProjectsPage() {
   });
 
   const startEdit = (p: Project) => {
-    setEditingId(p.id);
+    setEditingId(p.projects_id);
     setEditName(p.name);
     setEditCode(p.code);
     setEditDescription(p.description ?? '');
@@ -176,10 +176,10 @@ export default function ProjectsPage() {
           <ul className="space-y-2">
             {(projects as Project[]).map((p) => (
               <li
-                key={p.id}
+                key={p.projects_id}
                 className="p-3 sm:p-4 border rounded-lg space-y-3"
               >
-                {editingId === p.id ? (
+                {editingId === p.projects_id ? (
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label>이름</Label>
@@ -216,7 +216,7 @@ export default function ProjectsPage() {
                       <Button variant="ghost" size="sm" onClick={cancelEdit} disabled={updating}>
                         취소
                       </Button>
-                      <Button size="sm" onClick={() => handleUpdate(p.id)} disabled={updating} className="gap-1">
+                      <Button size="sm" onClick={() => handleUpdate(p.projects_id)} disabled={updating} className="gap-1">
                         {updating && <Loader2 className="h-4 w-4 animate-spin" />}
                         저장
                       </Button>

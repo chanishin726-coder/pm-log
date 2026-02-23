@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   // 할일 = (1) task_id_tag/task_state 있는 로그, (2) no_task_needed=false인 로그(AI가 할일로 분류)
   let query = supabase
     .from('logs')
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
+    .select('log_id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(projects_id, name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null,no_task_needed.eq.false')
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
     const tags = Array.from(new Set(tasks.map((t) => t.task_id_tag).filter(Boolean)));
     const { data: relatedLogs } = await supabase
       .from('logs')
-      .select('id, log_date, log_type, content, source, task_id_tag, project:projects(name, code)')
+      .select('log_id, log_date, log_type, content, source, task_id_tag, project:projects(name, code)')
       .eq('user_id', userId)
       .in('task_id_tag', tags)
       .order('log_date', { ascending: false })
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     const { data: project } = await supabase
       .from('projects')
       .select('code')
-      .eq('id', project_id)
+      .eq('projects_id', project_id)
       .eq('user_id', userId)
       .single();
     if (!project) {
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
       task_id_tag: tag,
       task_state: taskState,
     })
-    .select('*, project:projects(id, name, code)')
+    .select('*, project:projects(projects_id, name, code)')
     .single();
 
   if (error) {

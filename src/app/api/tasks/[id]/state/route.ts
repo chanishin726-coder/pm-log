@@ -32,7 +32,7 @@ export async function PUT(
   const { data: existing } = await supabase
     .from('logs')
     .select('task_state')
-    .eq('id', id)
+    .eq('log_id', id)
     .eq('user_id', userId)
     .single();
   const previousState = (existing as { task_state?: string | null } | null)?.task_state ?? null;
@@ -40,7 +40,7 @@ export async function PUT(
   const { data, error } = await supabase
     .from('logs')
     .update({ task_state: newState })
-    .eq('id', id)
+    .eq('log_id', id)
     .eq('user_id', userId)
     .select()
     .single();
@@ -53,15 +53,15 @@ export async function PUT(
     const now = new Date().toISOString();
     const { data: openRow } = await supabase
       .from('task_state_history')
-      .select('id')
+      .select('task_state_history_id')
       .eq('log_id', id)
       .is('valid_to', null)
       .maybeSingle();
-    if (openRow?.id) {
+    if (openRow?.task_state_history_id) {
       await supabase
         .from('task_state_history')
         .update({ valid_to: now })
-        .eq('id', (openRow as { id: string }).id);
+        .eq('task_state_history_id', (openRow as { task_state_history_id: string }).task_state_history_id);
     }
     await supabase.from('task_state_history').insert({
       log_id: id,

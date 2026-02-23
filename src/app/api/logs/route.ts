@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
   const { data: projects } = await supabase
     .from('projects')
-    .select('id, name, code')
+    .select('projects_id, name, code')
     .eq('user_id', userId);
 
   let items;
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
           { status: 400 }
         );
       }
-      projectId = found.id;
+      projectId = found.projects_id;
     }
 
     const parsedContent = parseLogContent(item.content);
@@ -99,9 +99,9 @@ export async function POST(req: Request) {
       fetch(`${baseUrl}/api/embeddings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logId: log.id }),
+        body: JSON.stringify({ logId: log.log_id }),
       }).catch((err) => {
-        console.warn('[POST /api/logs] Embedding request failed for log', log.id, err);
+        console.warn('[POST /api/logs] Embedding request failed for log', log.log_id, err);
       });
     }
   }
@@ -131,7 +131,7 @@ export async function GET(req: Request) {
   const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
   const listColumns =
-    'id, log_date, log_type, content, category_codes, source, task_id_tag, task_state, created_at, project_id, project:projects(id, name, code)';
+    'log_id, log_date, log_type, content, category_codes, source, task_id_tag, task_state, created_at, project_id, project:projects(projects_id, name, code)';
   let query = supabase
     .from('logs')
     .select(listColumns)

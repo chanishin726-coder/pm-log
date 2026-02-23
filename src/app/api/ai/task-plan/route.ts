@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   // 2) no_task_needed가 null이고, task_id_tag·task_state가 없는 로그만 (아직 분류·관리 안 된 것만)
   const { data: logsToClassify } = await supabase
     .from('logs')
-    .select('id, log_date, log_type, content, project:projects(id, name, code)')
+    .select('log_id, log_date, log_type, content, project:projects(projects_id, name, code)')
     .eq('user_id', userId)
     .in('log_date', recentDates)
     .is('no_task_needed', null)
@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         const p = (l as { project?: { name: string } | { name: string }[] | null }).project;
         const project = Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
         return {
-          id: l.id,
+          log_id: l.log_id,
           log_date: l.log_date,
           log_type: l.log_type,
           content: l.content ?? '',
@@ -77,14 +77,14 @@ export async function POST(req: Request) {
   let classified = 0;
 
   for (const log of logsToClassify) {
-    const isTask = logIdToIsTask.get(log.id);
+    const isTask = logIdToIsTask.get(log.log_id);
     if (isTask === undefined) continue;
 
     const noTaskNeeded = !isTask;
     const { error } = await supabase
       .from('logs')
       .update({ no_task_needed: noTaskNeeded })
-      .eq('id', log.id)
+      .eq('log_id', log.log_id)
       .eq('user_id', userId);
 
     if (!error) classified++;

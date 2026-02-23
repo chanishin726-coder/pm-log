@@ -11,7 +11,7 @@ export default async function DashboardPage() {
 
   const { data: taskLogs } = await supabase
     .from('logs')
-    .select('id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(id, name, code)')
+    .select('log_id, user_id, project_id, log_date, content, task_id_tag, task_state, created_at, source, project:projects(projects_id, name, code)')
     .eq('user_id', userId)
     .not('project_id', 'is', null)
     .or('task_state.not.is.null,task_id_tag.not.is.null')
@@ -24,9 +24,9 @@ export default async function DashboardPage() {
       const rawProject = (l as { project?: ProjectShape | ProjectShape[] }).project;
       const project: ProjectShape = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
       return {
-        id: l.id,
+        id: l.log_id,
         user_id: l.user_id,
-        log_id: l.id,
+        log_id: l.log_id,
         project_id: l.project_id,
         task_id_tag: l.task_id_tag ?? '',
         description: l.content,
@@ -45,7 +45,7 @@ export default async function DashboardPage() {
 
   const { data: recentLogs } = await supabase
     .from('logs')
-    .select('id, log_date, log_type, content, project:projects(id, name, code)')
+    .select('log_id, log_date, log_type, content, project:projects(projects_id, name, code)')
     .eq('user_id', userId)
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: false })
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
               const rawProject = (log as { project?: ProjectShape | ProjectShape[] }).project;
               const project = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
               return (
-                <li key={log.id} className="px-3 sm:px-4 py-3 flex flex-wrap gap-x-2 gap-y-1 text-sm min-h-[48px] items-center">
+                <li key={log.log_id} className="px-3 sm:px-4 py-3 flex flex-wrap gap-x-2 gap-y-1 text-sm min-h-[48px] items-center">
                   <span className="text-muted-foreground shrink-0">{log.log_date}</span>
                   <span className="font-mono text-xs shrink-0">{log.log_type}</span>
                   <span className="shrink-0">{project?.name || '-'}</span>

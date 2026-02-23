@@ -247,7 +247,7 @@ export default function LogDetailPage() {
               >
                 <option value="">미지정</option>
                 {(projects as { id: string; name: string; code: string }[]).map((p) => (
-                  <option key={p.id} value={p.id}>
+                  <option key={p.projects_id} value={p.projects_id}>
                     {p.name} ({p.code})
                   </option>
                 ))}
