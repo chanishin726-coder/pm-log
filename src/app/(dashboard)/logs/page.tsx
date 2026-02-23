@@ -172,7 +172,7 @@ export default function LogsPage() {
                       </Badge>
                       <span className="text-sm font-medium">{log.project?.name ?? NO_PROJECT_LABEL}</span>
                       {(log.category_codes?.length ?? 0) > 0 && (() => {
-                        const groups = [...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))];
+                        const groups = [...new Set((log.category_codes ?? []).map((c: string) => codeToGroup[c]).filter(Boolean))];
                         return groups.length > 0 ? (
                           <span className="text-xs text-muted-foreground">{groups.join(', ')}</span>
                         ) : null;

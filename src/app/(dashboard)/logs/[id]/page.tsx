@@ -221,7 +221,7 @@ export default function LogDetailPage() {
             <span className="text-muted-foreground text-sm">{log.log_date}</span>
           )}
           {(log.category_codes?.length ?? 0) > 0 && (() => {
-            const groups = [...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))];
+            const groups = [...new Set((log.category_codes ?? []).map((c: string) => codeToGroup[c]).filter(Boolean))];
             return groups.length > 0 ? (
               <Badge variant="outline">{groups.join(', ')}</Badge>
             ) : null;
