@@ -54,7 +54,7 @@ const MODEL_PRO = process.env.GEMINI_MODEL_PRO || 'gemini-2.5-flash-lite';
 export interface ParsedLog {
   projectCode: string | null;
   logType: 'F' | 'T' | 'W' | 'I';
-  categoryCode: string | null;
+  categoryCodes: string[];
   content: string;
   extractedKeywords: string[];
 }
@@ -127,7 +127,7 @@ export async function generateDailyReport(data: {
     log_date?: string;
     log_type: string;
     content: string;
-    category_code?: string | null;
+    parent_groups?: string;
     source?: string | null;
     created_at?: string;
     project?: { name: string; code: string } | null;
@@ -137,7 +137,7 @@ export async function generateDailyReport(data: {
     log_date: string;
     log_type: string;
     content: string;
-    category_code?: string | null;
+    parent_groups?: string;
     source?: string | null;
     task_id_tag?: string | null;
     created_at?: string;
@@ -158,7 +158,7 @@ export async function generateDailyReport(data: {
 
   const logsText = data.logs
     .map((l) => {
-      const cat = l.category_code ? ` ${l.category_code}` : '';
+      const cat = l.parent_groups?.trim() ? ` ${l.parent_groups}` : '';
       const src = l.source?.trim() ? ` source=${JSON.stringify(l.source)}` : '';
       return `id: ${l.id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}`;
     })
@@ -168,7 +168,7 @@ export async function generateDailyReport(data: {
     data.recentLogs && data.recentLogs.length > 0
       ? data.recentLogs
           .map((l) => {
-            const cat = l.category_code ? ` ${l.category_code}` : '';
+            const cat = l.parent_groups?.trim() ? ` ${l.parent_groups}` : '';
             const tag = l.task_id_tag ? ` (기존ID: ${l.task_id_tag})` : '';
             const src = l.source?.trim() ? ` source=${JSON.stringify(l.source)}` : '';
             return `${l.log_date} | id: ${l.id} | [${l.log_type}]${cat} ${l.project?.name || '기타'}${src}: ${l.content}${tag}`;

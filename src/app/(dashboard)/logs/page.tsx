@@ -18,7 +18,7 @@ export default function LogsPage() {
   const [logType, setLogType] = useState('');
   const [keyword, setKeyword] = useState('');
   const [taskIdTag, setTaskIdTag] = useState('');
-  const [categoryCode, setCategoryCode] = useState('');
+  const [parentGroup, setParentGroup] = useState('');
   const [source, setSource] = useState('');
 
   const { data: projects = [] } = useQuery({
@@ -30,6 +30,24 @@ export default function LogsPage() {
     },
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/categories');
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    },
+  });
+
+  const codeToGroup = (categories as { code: string; parent_group: string }[]).reduce<Record<string, string>>(
+    (acc, c) => {
+      acc[c.code] = c.parent_group;
+      return acc;
+    },
+    {}
+  );
+  const parentGroupsList = [...new Set((categories as { parent_group: string }[]).map((c) => c.parent_group))].sort();
+
   const {
     data,
     isLoading,
@@ -37,7 +55,7 @@ export default function LogsPage() {
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ['logs', projectId, logType, keyword, taskIdTag, categoryCode, source],
+    queryKey: ['logs', projectId, logType, keyword, taskIdTag, parentGroup, source],
     queryFn: async ({ pageParam = 0 }) => {
       const params = new URLSearchParams();
       params.set('limit', String(LOGS_PAGE_SIZE));
@@ -46,7 +64,7 @@ export default function LogsPage() {
       if (logType) params.set('logType', logType);
       if (keyword) params.set('keyword', keyword);
       if (taskIdTag) params.set('taskIdTag', taskIdTag);
-      if (categoryCode) params.set('categoryCode', categoryCode);
+      if (parentGroup) params.set('parentGroup', parentGroup);
       if (source) params.set('source', source);
       const res = await fetch(`/api/logs?${params}`);
       if (!res.ok) throw new Error('Failed to fetch logs');
@@ -78,14 +96,18 @@ export default function LogsPage() {
           onChange={(e) => setTaskIdTag(e.target.value)}
           className="w-full sm:w-36 min-h-[44px] sm:min-h-9"
         />
+        <select
+          value={parentGroup}
+          onChange={(e) => setParentGroup(e.target.value)}
+          className="border rounded-md px-3 py-2.5 text-sm min-h-[44px] sm:min-h-9 w-full sm:w-auto"
+        >
+          <option value="">전체 업무영역</option>
+          {parentGroupsList.map((g) => (
+            <option key={g} value={g}>{g}</option>
+          ))}
+        </select>
         <Input
-          placeholder="카테고리 코드"
-          value={categoryCode}
-          onChange={(e) => setCategoryCode(e.target.value)}
-          className="w-full sm:w-32 min-h-[44px] sm:min-h-9"
-        />
-        <Input
-          placeholder="발신/대상 (source)"
+          placeholder="출처/대상 (source)"
           value={source}
           onChange={(e) => setSource(e.target.value)}
           className="w-full sm:w-36 min-h-[44px] sm:min-h-9"
@@ -116,7 +138,7 @@ export default function LogsPage() {
           variant="outline"
           size="sm"
           className="min-h-[44px] sm:min-h-9 w-full sm:w-auto"
-          onClick={() => { setProjectId(''); setLogType(''); setKeyword(''); setTaskIdTag(''); setCategoryCode(''); setSource(''); }}
+          onClick={() => { setProjectId(''); setLogType(''); setKeyword(''); setTaskIdTag(''); setParentGroup(''); setSource(''); }}
         >
           초기화
         </Button>
@@ -149,9 +171,12 @@ export default function LogsPage() {
                         {log.log_type}
                       </Badge>
                       <span className="text-sm font-medium">{log.project?.name ?? NO_PROJECT_LABEL}</span>
-                      {log.category_code && (
-                        <span className="text-xs text-muted-foreground">{log.category_code}</span>
-                      )}
+                      {(log.category_codes?.length ?? 0) > 0 && (() => {
+                        const groups = [...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))];
+                        return groups.length > 0 ? (
+                          <span className="text-xs text-muted-foreground">{groups.join(', ')}</span>
+                        ) : null;
+                      })()}
                       {taskState != null && (
                         <Badge variant="outline" className="text-xs">
                           {getTaskStateLabel(taskState)}

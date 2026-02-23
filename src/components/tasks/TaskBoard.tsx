@@ -33,7 +33,8 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
   /** D AI 추천 = task_state null (미분류)인 할일. API가 이미 task_id_tag 있거나 no_task_needed false인 것만 반환하므로 null이면 해당 */
   const reviewTasks = (tasks ?? []).filter((t: Task) => getTaskState(t) === null);
   const doneTasks = filterByState('done');
-  const allTasksCount = tasks?.length ?? 0;
+  /** 전체 탭에는 X 완료 제외한 할일만 표시 (A/B/C/D) */
+  const allTabTaskCount = highTasks.length + mediumTasks.length + lowTasks.length + reviewTasks.length;
 
   return (
     <div className="w-full overflow-hidden">
@@ -41,9 +42,9 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
         <TabsList className="grid w-full grid-cols-6 min-h-[44px] sm:min-h-9 gap-0 p-0.5">
           <TabsTrigger value="all" className="relative min-h-[40px] sm:min-h-0 text-xs sm:text-sm py-2">
             전체
-            {allTasksCount > 0 && (
+            {allTabTaskCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-                {allTasksCount}
+                {allTabTaskCount}
               </span>
             )}
           </TabsTrigger>
@@ -90,7 +91,7 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
         </TabsList>
 
         <TabsContent value="all" className="space-y-4 mt-4">
-          {allTasksCount === 0 ? (
+          {allTabTaskCount === 0 ? (
             <p className="text-center text-muted-foreground py-8 text-sm">
               할일이 없습니다
             </p>
@@ -120,12 +121,6 @@ export function TaskBoard({ initialTasks = [] }: TaskBoardProps) {
                   {reviewTasks.map((task: Task) => (
                     <TaskCard key={task.id} task={task} isReview />
                   ))}
-                </div>
-              )}
-              {doneTasks.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground px-1">X 완료</p>
-                  {doneTasks.map((task: Task) => <TaskCard key={task.id} task={task} />)}
                 </div>
               )}
             </>

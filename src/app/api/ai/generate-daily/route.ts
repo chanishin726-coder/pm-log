@@ -13,29 +13,36 @@ type LogForSection3 = {
   project: { name: string } | null;
 };
 
-/** 1수준 project, 2수준 task_id_tag(없으면 source), 3수준 created_at. 각 줄은 [F/T/W/I] source: content → #tag(있을 때만) */
+/** 1수준 project(로그 많은 순, 기타는 항상 맨 아래), 2수준 task_id_tag(없으면 source), 3수준 created_at. 각 줄은 [F/T/W/I] source: content → #tag(있을 때만) */
 function formatSection3Logs(logs: LogForSection3[]): string {
   if (logs.length === 0) return '   - 없음';
-  const sorted = [...logs].sort((a, b) => {
-    const projA = a.project?.name?.trim() ? a.project.name.trim() : '기타';
-    const projB = b.project?.name?.trim() ? b.project.name.trim() : '기타';
-    if (projA !== projB) return projA.localeCompare(projB);
-    const groupA = a.task_id_tag ?? (a.source?.trim() ?? '');
-    const groupB = b.task_id_tag ?? (b.source?.trim() ?? '');
-    if (groupA !== groupB) return groupA.localeCompare(groupB);
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  });
+  const projectName = (l: LogForSection3) => l.project?.name?.trim() ? l.project.name.trim() : '기타';
+  const byProject = new Map<string, LogForSection3[]>();
+  for (const l of logs) {
+    const name = projectName(l);
+    if (!byProject.has(name)) byProject.set(name, []);
+    byProject.get(name)!.push(l);
+  }
+  const projectOrder = [...byProject.entries()]
+    .sort(([nameA, arrA], [nameB, arrB]) => {
+      if (nameA === '기타') return 1;
+      if (nameB === '기타') return -1;
+      return arrB.length - arrA.length;
+    });
   const lines: string[] = [];
-  let currentProject = '';
-  for (const l of sorted) {
-    const proj = l.project?.name?.trim() ? l.project.name.trim() : '기타';
-    if (proj !== currentProject) {
-      currentProject = proj;
-      lines.push(proj);
+  for (const [projName, group] of projectOrder) {
+    const sorted = [...group].sort((a, b) => {
+      const groupA = a.task_id_tag ?? (a.source?.trim() ?? '');
+      const groupB = b.task_id_tag ?? (b.source?.trim() ?? '');
+      if (groupA !== groupB) return groupA.localeCompare(groupB);
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    lines.push(projName);
+    for (const l of sorted) {
+      const source = (l.source && l.source.trim()) ? l.source.trim() : '(없음)';
+      const suffix = l.task_id_tag ? ` → ${l.task_id_tag}` : '';
+      lines.push(` - [${l.log_type}] ${source}: ${l.content}${suffix}`);
     }
-    const source = (l.source && l.source.trim()) ? l.source.trim() : '(없음)';
-    const suffix = l.task_id_tag ? ` → ${l.task_id_tag}` : '';
-    lines.push(` - [${l.log_type}] ${source}: ${l.content}${suffix}`);
   }
   return lines.join('\n');
 }
@@ -56,7 +63,7 @@ function buildReportSection12(tasks: TaskForSection1[]): string {
   const line = (t: TaskForSection1) => {
     const source = (t.source && t.source.trim()) ? t.source.trim() : '(없음)';
     const suffix = t.task_id_tag ? ` → ${t.task_id_tag}` : '';
-    return `${source}: ${t.description}${suffix}${t.due_date ? ` (마감: ${t.due_date})` : ''}`;
+    return ` - ${source}: ${t.description}${suffix}${t.due_date ? ` (마감: ${t.due_date})` : ''}`;
   };
   return `1. 할일
    A. 우선순위
@@ -102,7 +109,7 @@ export async function POST(req: Request) {
 
   const { data: logs } = await supabase
     .from('logs')
-    .select('id, log_date, log_type, content, category_code, source, created_at, project:projects(id, name, code)')
+    .select('id, log_date, log_type, content, category_codes, source, created_at, project:projects(id, name, code)')
     .eq('user_id', userId)
     .eq('log_date', targetDate)
     .order('created_at', { ascending: true });
@@ -121,7 +128,7 @@ export async function POST(req: Request) {
   const [recentResult, taskLogsResult, prevReportResult] = await Promise.all([
     supabase
       .from('logs')
-      .select('id, log_date, log_type, content, category_code, source, task_id_tag, created_at, project:projects(id, name, code)')
+      .select('id, log_date, log_type, content, category_codes, source, task_id_tag, created_at, project:projects(id, name, code)')
       .eq('user_id', userId)
       .lt('log_date', targetDate)
       .order('log_date', { ascending: false })
@@ -204,11 +211,31 @@ export async function POST(req: Request) {
       return { ...l, project } as T;
     });
 
+  const { data: categories } = await supabase.from('categories').select('code, parent_group');
+  const codeToGroup = (categories ?? []).reduce<Record<string, string>>(
+    (acc, c) => {
+      acc[(c as { code: string }).code] = (c as { parent_group: string }).parent_group;
+      return acc;
+    },
+    {}
+  );
+  const toParentGroups = (codes: string[] | null | undefined): string =>
+    [...new Set((codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))].join(', ') || '';
+
+  const logsWithGroups = (normalizeProject(logs ?? []) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
+    ...l,
+    parent_groups: toParentGroups(l.category_codes),
+  }));
+  const recentWithGroups = (normalizeProject((recentLogs ?? []).filter((l) => l.log_date !== targetDate)) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
+    ...l,
+    parent_groups: toParentGroups(l.category_codes),
+  }));
+
   let result: { logAssignments: Array<{ logId: string; taskIdTag: string | null }>; newTasks: Array<{ description: string; projectCode: string; priority: string; logIds: string[] }> };
   try {
     result = await generateDailyReport({
-      logs: normalizeProject(logs ?? []) as unknown as Parameters<typeof generateDailyReport>[0]['logs'],
-      recentLogs: normalizeProject((recentLogs ?? []).filter((l) => l.log_date !== targetDate)) as unknown as Parameters<typeof generateDailyReport>[0]['recentLogs'],
+      logs: logsWithGroups as unknown as Parameters<typeof generateDailyReport>[0]['logs'],
+      recentLogs: recentWithGroups as unknown as Parameters<typeof generateDailyReport>[0]['recentLogs'],
       tasks: tasks || [],
       previousReport: prevReport?.content,
       targetDate,

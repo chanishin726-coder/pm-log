@@ -25,7 +25,7 @@ const taskStateEnum = z.enum(['high', 'medium', 'low', 'done']);
 export const updateLogSchema = z.object({
   content: z.string().optional(),
   log_type: logTypeEnum.optional(),
-  category_code: z.string().nullable().optional(),
+  category_codes: z.array(z.string()).optional(),
   source: z.string().nullable().optional(),
   task_id_tag: z.string().nullable().optional(),
   task_state: taskStateEnum.nullable().optional(),

@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     raw_input: string;
     content: string;
     log_type: string;
-    category_code: string | null;
+    category_codes: string[];
     keywords: string[] | null;
     source: string | null;
     task_id_tag: string | null;
@@ -72,6 +72,7 @@ export async function POST(req: Request) {
 
     const parsedContent = parseLogContent(item.content);
     const tag = parsedContent.task_id_tag ?? fromRawTag;
+    const codes = Array.isArray(item.categoryCodes) && item.categoryCodes.length > 0 ? item.categoryCodes : [];
 
     rows.push({
       user_id: userId,
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
       raw_input: rawInput,
       content: parsedContent.content,
       log_type: item.logType,
-      category_code: item.categoryCode ?? null,
+      category_codes: codes,
       keywords: item.extractedKeywords ?? null,
       source: parsedContent.source ?? null,
       task_id_tag: tag ?? null,
@@ -124,13 +125,13 @@ export async function GET(req: Request) {
   const endDate = searchParams.get('endDate');
   const keyword = searchParams.get('keyword');
   const taskIdTag = searchParams.get('taskIdTag');
-  const categoryCode = searchParams.get('categoryCode');
+  const parentGroup = searchParams.get('parentGroup');
   const source = searchParams.get('source');
   const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') ?? '100', 10)), 500);
   const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0', 10));
 
   const listColumns =
-    'id, log_date, log_type, content, category_code, source, task_id_tag, task_state, created_at, project_id, project:projects(id, name, code)';
+    'id, log_date, log_type, content, category_codes, source, task_id_tag, task_state, created_at, project_id, project:projects(id, name, code)';
   let query = supabase
     .from('logs')
     .select(listColumns)
@@ -149,8 +150,18 @@ export async function GET(req: Request) {
   if (endDate) query = query.lte('log_date', endDate);
   if (keyword) query = query.contains('keywords', [keyword]);
   if (taskIdTag?.trim()) query = query.ilike('task_id_tag', `%${taskIdTag.trim()}%`);
-  if (categoryCode?.trim()) query = query.ilike('category_code', `%${categoryCode.trim()}%`);
   if (source?.trim()) query = query.ilike('source', `%${source.trim()}%`);
+
+  if (parentGroup?.trim()) {
+    const { data: cats } = await supabase
+      .from('categories')
+      .select('code')
+      .eq('parent_group', parentGroup.trim());
+    const codes = (cats ?? []).map((c) => (c as { code: string }).code);
+    if (codes.length > 0) {
+      query = query.overlaps('category_codes', codes);
+    }
+  }
 
   const { data, error } = await query;
 

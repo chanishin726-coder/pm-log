@@ -26,7 +26,7 @@ BEGIN
   ON CONFLICT (project_code, date)
   DO UPDATE SET last_seq = task_id_sequences.last_seq + 1
   RETURNING last_seq INTO seq;
-  new_id := '#' || p_project_code || yymmdd || LPAD(seq::TEXT, 2, '0');
+  new_id := '#' || p_project_code || ymmdd || LPAD(seq::TEXT, 2, '0');
   RETURN new_id;
 END;
 $$;

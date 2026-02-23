@@ -26,7 +26,7 @@ export default function LogDetailPage() {
   const [editContent, setEditContent] = useState('');
   const [editTaskIdTag, setEditTaskIdTag] = useState('');
   const [editLogType, setEditLogType] = useState('');
-  const [editCategoryCode, setEditCategoryCode] = useState('');
+  const [editParentGroups, setEditParentGroups] = useState<string[]>([]);
   const [editTaskState, setEditTaskState] = useState<string>('');
   const [editProjectId, setEditProjectId] = useState<string>('');
   const [editLogDate, setEditLogDate] = useState<string>('');
@@ -49,8 +49,33 @@ export default function LogDetailPage() {
     },
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/categories');
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    },
+  });
+
+  const codeToGroup = (categories as { code: string; parent_group: string }[]).reduce<Record<string, string>>(
+    (acc, c) => {
+      acc[c.code] = c.parent_group;
+      return acc;
+    },
+    {}
+  );
+  const parentGroupsList = [...new Set((categories as { parent_group: string }[]).map((c) => c.parent_group))].sort();
+  const groupToFirstCode = (categories as { code: string; parent_group: string }[]).reduce<Record<string, string>>(
+    (acc, c) => {
+      if (!acc[c.parent_group]) acc[c.parent_group] = c.code;
+      return acc;
+    },
+    {}
+  );
+
   const { mutate: saveLog, isPending: saving } = useMutation({
-    mutationFn: async (payload: { source?: string; content?: string; task_id_tag?: string | null; log_type?: string; category_code?: string | null; task_state?: TaskState | null; project_id?: string | null; log_date?: string }) => {
+    mutationFn: async (payload: { source?: string; content?: string; task_id_tag?: string | null; log_type?: string; category_codes?: string[]; task_state?: TaskState | null; project_id?: string | null; log_date?: string }) => {
       const res = await fetch(`/api/logs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -102,7 +127,7 @@ export default function LogDetailPage() {
       setEditContent(log.content ?? '');
       setEditTaskIdTag(log.task_id_tag ?? '');
       setEditLogType(log.log_type ?? '');
-      setEditCategoryCode(log.category_code ?? '');
+      setEditParentGroups([...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))]);
       setEditTaskState(logWithState.task_state ?? '');
       setEditProjectId(log.project_id ?? '');
       setEditLogDate(log.log_date ?? '');
@@ -116,7 +141,7 @@ export default function LogDetailPage() {
       content: editContent.trim(),
       task_id_tag: editTaskIdTag.trim() || null,
       log_type: editLogType,
-      category_code: editCategoryCode.trim() || null,
+      category_codes: editParentGroups.map((g) => groupToFirstCode[g]).filter(Boolean),
       task_state: editTaskState ? (editTaskState as TaskState) : null,
       project_id: editProjectId || null,
       log_date: editLogDate.trim() || undefined,
@@ -195,7 +220,12 @@ export default function LogDetailPage() {
           ) : (
             <span className="text-muted-foreground text-sm">{log.log_date}</span>
           )}
-          {log.category_code && <Badge variant="outline">{log.category_code}</Badge>}
+          {(log.category_codes?.length ?? 0) > 0 && (() => {
+            const groups = [...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))];
+            return groups.length > 0 ? (
+              <Badge variant="outline">{groups.join(', ')}</Badge>
+            ) : null;
+          })()}
           {(log as { task_state?: string | null }).task_state && (
             <Badge variant="outline">{getTaskStateLabel((log as { task_state: TaskState }).task_state)}</Badge>
           )}
@@ -237,20 +267,30 @@ export default function LogDetailPage() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label>카테고리 코드 (선택)</Label>
-              <Input
-                value={editCategoryCode}
-                onChange={(e) => setEditCategoryCode(e.target.value)}
-                placeholder="예: H7, E9"
-                className="min-h-[44px]"
-              />
+              <Label>업무영역 (복수 선택)</Label>
+              <div className="flex flex-wrap gap-2">
+                {parentGroupsList.map((g) => (
+                  <label key={g} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editParentGroups.includes(g)}
+                      onChange={(e) => {
+                        if (e.target.checked) setEditParentGroups((prev) => [...prev, g].sort());
+                        else setEditParentGroups((prev) => prev.filter((x) => x !== g));
+                      }}
+                      className="rounded border-input"
+                    />
+                    {g}
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>발신/대상 (source)</Label>
+              <Label>출처/대상 (source)</Label>
               <Input
                 value={editSource}
                 onChange={(e) => setEditSource(e.target.value)}
-                placeholder="발신/대상"
+                placeholder="출처/대상"
                 className="min-h-[44px]"
               />
             </div>
@@ -292,7 +332,7 @@ export default function LogDetailPage() {
           <>
             {log.source != null && log.source !== '' && (
               <div>
-                <p className="text-sm text-muted-foreground">발신/대상</p>
+                <p className="text-sm text-muted-foreground">출처/대상</p>
                 <p className="mt-1">{log.source}</p>
               </div>
             )}

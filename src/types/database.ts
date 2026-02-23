@@ -8,6 +8,7 @@ export interface Category {
   id: number;
   code: string;
   name: string;
+  /** 업무영역(표시용): 개발기획, 사업총괄, 재무관리, 설계관리, 공사관리, 사업관리, 기타 */
   parent_group: string;
 }
 
@@ -30,7 +31,7 @@ export interface Log {
   raw_input: string;
   content: string;
   log_type: LogType;
-  category_code: string | null;
+  category_codes: string[];
   keywords: string[] | null;
   task_id_tag: string | null;
   no_task_needed: boolean | null;
@@ -57,7 +58,7 @@ export interface Task {
   ai_reason: string | null;
   sort_order: number;
   project?: { id: string; name: string; code: string } | null;
-  /** F/T=연락 상대(발신/대상), W=관련 당사자, I=정보 출처 (없을 수 있음) */
+  /** F/T=연락 상대(출처/대상), W=관련 당사자, I=정보 출처 (없을 수 있음) */
   source?: string | null;
 }
 

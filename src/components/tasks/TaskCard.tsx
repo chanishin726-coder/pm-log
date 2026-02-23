@@ -61,7 +61,7 @@ export function TaskCard({ task, isReview }: TaskCardProps) {
 
   const cardContent = (
     <>
-      {/* 1행: 태그·프로젝트·발신/대상·D-day + 상태 버튼 */}
+      {/* 1행: 태그·프로젝트·출처/대상·D-day + 상태 버튼 */}
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-xs font-mono text-muted-foreground">
           {task.task_id_tag}
@@ -72,7 +72,7 @@ export function TaskCard({ task, isReview }: TaskCardProps) {
           </span>
         )}
         {task.source && (
-          <span className="text-xs text-muted-foreground" title="발신/대상">
+          <span className="text-xs text-muted-foreground" title="출처/대상">
             {task.source}
           </span>
         )}

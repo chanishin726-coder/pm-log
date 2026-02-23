@@ -55,7 +55,7 @@ export async function PUT(
     const msg = parsed.error.flatten().formErrors[0] || '입력값을 확인해 주세요.';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  const { content, log_type, category_code, source, task_id_tag, task_state, project_id, log_date } = parsed.data;
+  const { content, log_type, category_codes, source, task_id_tag, task_state, project_id, log_date } = parsed.data;
 
   let previousTaskState: string | null = null;
   if (task_state !== undefined) {
@@ -71,7 +71,7 @@ export async function PUT(
   const update: Record<string, unknown> = {};
   if (content !== undefined) update.content = content;
   if (log_type !== undefined) update.log_type = log_type;
-  if (category_code !== undefined) update.category_code = category_code;
+  if (category_codes !== undefined) update.category_codes = category_codes;
   if (source !== undefined) update.source = source;
   if (task_id_tag !== undefined) update.task_id_tag = task_id_tag;
   if (task_state !== undefined) update.task_state = task_state;
