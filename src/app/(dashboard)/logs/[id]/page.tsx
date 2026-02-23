@@ -127,7 +127,7 @@ export default function LogDetailPage() {
       setEditContent(log.content ?? '');
       setEditTaskIdTag(log.task_id_tag ?? '');
       setEditLogType(log.log_type ?? '');
-      setEditParentGroups([...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))]);
+      setEditParentGroups([...new Set((log.category_codes ?? []).map((c) => codeToGroup[c]).filter((x): x is string => Boolean(x)))]);
       setEditTaskState(logWithState.task_state ?? '');
       setEditProjectId(log.project_id ?? '');
       setEditLogDate(log.log_date ?? '');
