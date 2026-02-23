@@ -114,7 +114,7 @@ logId는 반드시 아래 목록에 적힌 id(uuid)를 그대로 사용하세요
 `;
 
 export const GENERATE_DAILY_PROMPT = `
-당신의 역할: 당일 로그마다 **후속조치 필요 여부**만 판단하고, 필요 시 기존 할일 ID에 묶거나 신규 할일로 묶는다. [ASSIGNMENTS] 블록만 출력하면 된다.
+당신의 역할: 당일 로그마다 **판단만** 한다. (1) 기존 할일과 관련 있음 → 해당 task_id_tag 지목 (2) 할일이지만 매칭되는 기존 태그 없음 → newTasks에만 넣기 (3) 할일 아님 → taskIdTag: null. **task_id_tag 문자열을 새로 만들지 않는다.** 서버가 기존 태그 부여·신규 태그 생성 규칙을 적용한다. [ASSIGNMENTS] 블록만 출력하면 된다.
 
 ## 로그 타입·source 참고
 - F(수신): source=나에게 연락한 상대. T(발신): source=내가 연락한 상대. W(실행): source=관련 당사자(없을 수 있음). I(정보): source=정보 출처(없을 수 있음).
@@ -154,10 +154,10 @@ export const GENERATE_DAILY_PROMPT = `
 
 ## 규칙
 - logAssignments: **당일 로그**만 한 건씩. 제공된 당일 로그 id만 사용.
-- taskIdTag는 **제공된 할일 목록**에 있는 기존 ID만 사용하거나, newTasks에 넣은 건은 logIds로만 연결(새 ID는 서버가 부여).
+- **taskIdTag는 반드시 제공된 할일 목록에 나온 태그만 사용.** 목록에 없는 태그는 절대 사용하지 말 것. 새 태그를 만들어 logAssignments에 넣지 말 것.
+- **신규 할일**이면 **newTasks에만** 넣고(description, projectCode, priority, logIds). 서버가 태그를 생성해 부여함. logAssignments에는 해당 로그를 새 태그로 넣지 말 것.
 - **기존 task_id_tag 사용 조건**: ① 동일 당사자 ② 동일 사안 ③ 선후관계 중 2가지 이상 충족할 때만. **애매하면 반드시 null 또는 newTasks로 두고, 기존 태그에 묶지 않음.**
-- ID 형식: #프로젝트코드YMMDDNN (연도 1자리). projectCode는 프로젝트 code(약어)만. "기타"는 projectCode로 사용 금지(표시용 라벨).
-- newTasks의 projectCode도 등록된 프로젝트 code만.
+- newTasks의 projectCode는 등록된 프로젝트 code만. "기타"는 projectCode 사용 금지(표시용 라벨).
 `;
 
 export const EXECUTIVE_SUMMARY_PROMPT = `

@@ -1,7 +1,7 @@
 /**
  * Supabase에 저장된 데이터를 한 번에 JSON으로 export합니다.
  * 사용: node scripts/export-supabase-data.js
- * 결과: supabase-export/ 에 테이블별 .json 및 all.json
+ * 결과: supabase-export/YYYY-MM-DD_HHmmss/ 에 테이블별 .json 및 all.json
  */
 
 const fs = require('fs');
@@ -58,7 +58,10 @@ async function fetchTable(table) {
 }
 
 async function main() {
-  const outDir = path.join(__dirname, '..', 'supabase-export');
+  const now = new Date();
+  const dateFolder = now.toISOString().slice(0, 10) + '_' + now.toTimeString().slice(0, 5).replace(':', '');
+  const baseDir = path.join(__dirname, '..', 'supabase-export');
+  const outDir = path.join(baseDir, dateFolder);
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
   const all = {};
@@ -79,7 +82,7 @@ async function main() {
     JSON.stringify(all, null, 2),
     'utf8'
   );
-  console.log(`\n전체 통합본: supabase-export/all.json`);
+  console.log(`\n백업 완료: supabase-export/${dateFolder}/`);
 }
 
 main().catch((e) => {

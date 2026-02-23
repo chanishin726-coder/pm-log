@@ -250,7 +250,8 @@ export async function POST(req: Request) {
   const { logAssignments, newTasks } = result;
   const logIdsThisDay = new Set(logs.map((l) => l.id));
 
-  // task_id_tag는 당일 로그(3. 일지 및 소통 이력에만 나오는 로그)에만 부여. AI가 다른 id를 반환해도 무시.
+  // logAssignments에 허용할 task_id_tag: 제공한 할일 목록 + 이번에 newTasks로 생성한 태그만.
+  const allowedTaskIdTags = new Set(tasks.map((t) => t.task_id_tag).filter(Boolean));
   const assignmentsThisDay = (logAssignments ?? []).filter((a) => logIdsThisDay.has(a.logId));
 
   for (const nt of newTasks) {
@@ -266,6 +267,7 @@ export async function POST(req: Request) {
       p_date: targetDate,
     });
     const taskIdTag = (tag as string) ?? `#${nt.projectCode}-${targetDate.replace(/-/g, '')}-99`;
+    allowedTaskIdTags.add(taskIdTag);
     const firstLogId = nt.logIds?.[0];
     if (firstLogId && logIdsThisDay.has(firstLogId)) {
       // 이미 task_id_tag가 있으면 덮어쓰지 않음(고유 ID 수동 지정 보존). task_state는 사용자만 수동 변경.
@@ -293,8 +295,8 @@ export async function POST(req: Request) {
   }
 
   for (const a of assignmentsThisDay) {
-    if (a.taskIdTag != null) {
-      // 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
+    if (a.taskIdTag != null && allowedTaskIdTags.has(a.taskIdTag)) {
+      // 허용된 태그만 적용. 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
       await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('id', a.logId).eq('user_id', userId).is('task_id_tag', null);
     }
   }
