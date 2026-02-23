@@ -119,7 +119,7 @@ export default function LogsPage() {
         >
           <option value="">전체 프로젝트</option>
           <option value={NO_PROJECT_FILTER_VALUE}>{NO_PROJECT_LABEL}</option>
-          {(projects as { id: string; name: string }[]).map((p) => (
+          {(projects as { projects_id: string; name: string }[]).map((p) => (
             <option key={p.projects_id} value={p.projects_id}>{p.name}</option>
           ))}
         </select>
