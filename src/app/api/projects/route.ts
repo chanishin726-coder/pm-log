@@ -45,8 +45,7 @@ export async function POST(req: Request) {
     const msg = parsedBody.error.flatten().formErrors[0] || 'name, code required';
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  const { name, code, description } = parsedBody.data;
-  const status = typeof (body as { status?: string }).status === 'string' ? (body as { status: string }).status : 'active';
+  const { name, code, description, status } = parsedBody.data;
 
   const { data, error } = await supabase
     .from('projects')
@@ -55,7 +54,7 @@ export async function POST(req: Request) {
       name,
       code,
       description: description || null,
-      status: status || 'active',
+      status: status ?? 'active',
     })
     .select()
     .single();

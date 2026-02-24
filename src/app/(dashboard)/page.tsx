@@ -3,6 +3,7 @@ import { TaskBoard } from '@/components/tasks/TaskBoard';
 import { SyncButton } from '@/components/dashboard/SyncButton';
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId } from '@/lib/auth';
+import { normalizeProject } from '@/lib/task-from-log';
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -21,8 +22,7 @@ export default async function DashboardPage() {
   const todayTasks = (taskLogs ?? [])
     .map((l) => {
       if (!l.project_id) return null;
-      const rawProject = (l as { project?: ProjectShape | ProjectShape[] }).project;
-      const project: ProjectShape = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
+      const { project } = normalizeProject(l as { project?: unknown; project_id: string; log_id: string; user_id: string; log_date: string; content: string | null; task_id_tag: string | null; task_state?: string | null; created_at: string; source?: string | null });
       return {
         id: l.log_id,
         user_id: l.user_id,
@@ -37,7 +37,7 @@ export default async function DashboardPage() {
         ai_recommended: false,
         ai_reason: null,
         sort_order: 0,
-        project,
+        project: project as ProjectShape,
         source: (l as { source?: string | null }).source ?? null,
       };
     })
@@ -66,13 +66,12 @@ export default async function DashboardPage() {
         {recentLogs && recentLogs.length > 0 ? (
           <ul className="space-y-0 border rounded-lg divide-y overflow-hidden">
             {recentLogs.map((log) => {
-              const rawProject = (log as { project?: ProjectShape | ProjectShape[] }).project;
-              const project = Array.isArray(rawProject) ? (rawProject[0] ?? null) : (rawProject ?? null);
+              const { project } = normalizeProject(log as { project?: unknown });
               return (
                 <li key={log.log_id} className="px-3 sm:px-4 py-3 flex flex-wrap gap-x-2 gap-y-1 text-sm min-h-[48px] items-center">
                   <span className="text-muted-foreground shrink-0">{log.log_date}</span>
                   <span className="font-mono text-xs shrink-0">{log.log_type}</span>
-                  <span className="shrink-0">{project?.name || '-'}</span>
+                  <span className="shrink-0">{(project as ProjectShape)?.name || '-'}</span>
                   <span className="truncate min-w-0">{log.content}</span>
                 </li>
               );

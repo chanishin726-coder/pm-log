@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils/date';
 import { generateDailyReport } from '@/lib/ai/gemini';
+import { normalizeProject } from '@/lib/task-from-log';
 import { NextResponse } from 'next/server';
 
 type LogForSection3 = {
@@ -204,13 +205,6 @@ export async function POST(req: Request) {
     .filter((t) => t.task_id_tag)
     .filter((t) => t.task_state != null && t.task_state !== 'done');
 
-  const normalizeProject = <T extends { project?: unknown }>(arr: T[]): T[] =>
-    arr.map((l) => {
-      const p = l.project;
-      const project = Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
-      return { ...l, project } as T;
-    });
-
   const { data: categories } = await supabase.from('categories').select('code, parent_group');
   const codeToGroup = (categories ?? []).reduce<Record<string, string>>(
     (acc, c) => {
@@ -222,11 +216,11 @@ export async function POST(req: Request) {
   const toParentGroups = (codes: string[] | null | undefined): string =>
     [...new Set((codes ?? []).map((c) => codeToGroup[c]).filter(Boolean))].join(', ') || '';
 
-  const logsWithGroups = (normalizeProject(logs ?? []) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
+  const logsWithGroups = ((logs ?? []).map(normalizeProject) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
     ...l,
     parent_groups: toParentGroups(l.category_codes),
   }));
-  const recentWithGroups = (normalizeProject((recentLogs ?? []).filter((l) => l.log_date !== targetDate)) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
+  const recentWithGroups = ((recentLogs ?? []).filter((l) => l.log_date !== targetDate).map(normalizeProject) as Array<{ category_codes?: string[] } & Record<string, unknown>>).map((l) => ({
     ...l,
     parent_groups: toParentGroups(l.category_codes),
   }));
@@ -273,17 +267,32 @@ export async function POST(req: Request) {
       });
       const taskIdTag = (tag as string) ?? `#${projectCode}-${targetDate.replace(/-/g, '')}-99`;
       allowedTaskIdTags.add(taskIdTag);
-      for (const logId of logIds) {
-        await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('log_id', logId).eq('user_id', userId).is('task_id_tag', null);
+      if (logIds.length > 0) {
+        await supabase
+          .from('logs')
+          .update({ task_id_tag: taskIdTag, no_task_needed: false })
+          .eq('user_id', userId)
+          .is('task_id_tag', null)
+          .in('log_id', logIds);
       }
     }
   }
 
+  // 허용된 태그별로 log_id 묶어서 배치 UPDATE (N+1 방지)
+  const logIdsByAssignedTag = new Map<string, string[]>();
   for (const a of assignmentsThisDay) {
     if (a.taskIdTag != null && allowedTaskIdTags.has(a.taskIdTag)) {
-      // 허용된 태그만 적용. 이미 task_id_tag가 있으면 덮어쓰지 않음(수동 지정 보존)
-      await supabase.from('logs').update({ task_id_tag: a.taskIdTag, no_task_needed: false }).eq('log_id', a.logId).eq('user_id', userId).is('task_id_tag', null);
+      if (!logIdsByAssignedTag.has(a.taskIdTag)) logIdsByAssignedTag.set(a.taskIdTag, []);
+      logIdsByAssignedTag.get(a.taskIdTag)!.push(a.logId);
     }
+  }
+  for (const [taskIdTag, logIds] of logIdsByAssignedTag) {
+    await supabase
+      .from('logs')
+      .update({ task_id_tag: taskIdTag, no_task_needed: false })
+      .eq('user_id', userId)
+      .is('task_id_tag', null)
+      .in('log_id', logIds);
   }
 
   const startOfTargetDate = `${targetDate}T00:00:00.000Z`;
@@ -312,7 +321,7 @@ export async function POST(req: Request) {
   const logsForSection3Filtered = (logsForSection3Raw ?? []).filter(
     (l) => !excludeFromSection3.has((l as { log_id: string }).log_id)
   );
-  const logsForSection3 = normalizeProject(logsForSection3Filtered as { project?: unknown }[]);
+  const logsForSection3 = logsForSection3Filtered.map((l) => normalizeProject(l as { project?: unknown }));
   const section3Text = formatSection3Logs(logsForSection3 as unknown as LogForSection3[]);
   let completedItems: CompletedItem[] = [];
   if (doneLogIds.length > 0) {

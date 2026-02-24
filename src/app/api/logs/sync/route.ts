@@ -34,19 +34,23 @@ export async function POST() {
       .eq('user_id', userId)
       .is('project_id', null);
 
+    // 프로젝트별로 log_id 묶어서 배치 UPDATE (N+1 방지)
+    const logIdsByProjectId = new Map<string, string[]>();
     for (const log of logsNoProject ?? []) {
       const code = extractProjectCodeFromRaw(log.raw_input ?? '', codes);
       if (!code) continue;
       const projectId = codeToId.get(code);
       if (!projectId) continue;
-
+      if (!logIdsByProjectId.has(projectId)) logIdsByProjectId.set(projectId, []);
+      logIdsByProjectId.get(projectId)!.push(log.log_id);
+    }
+    for (const [projectId, logIds] of logIdsByProjectId) {
       const { error } = await supabase
         .from('logs')
         .update({ project_id: projectId })
-        .eq('log_id', log.log_id)
-        .eq('user_id', userId);
-
-      if (!error) projectUpdated++;
+        .eq('user_id', userId)
+        .in('log_id', logIds);
+      if (!error) projectUpdated += logIds.length;
     }
   }
 
@@ -57,17 +61,21 @@ export async function POST() {
     .eq('user_id', userId)
     .is('task_id_tag', null);
 
+  // 태그별로 log_id 묶어서 배치 UPDATE (N+1 방지)
+  const logIdsByTag = new Map<string, string[]>();
   for (const log of logsNoTag ?? []) {
     const tag = parseLogContent(log.raw_input ?? '').task_id_tag;
     if (!tag?.trim()) continue;
-
+    if (!logIdsByTag.has(tag)) logIdsByTag.set(tag, []);
+    logIdsByTag.get(tag)!.push(log.log_id);
+  }
+  for (const [tag, logIds] of logIdsByTag) {
     const { error } = await supabase
       .from('logs')
       .update({ task_id_tag: tag })
-      .eq('log_id', log.log_id)
-      .eq('user_id', userId);
-
-    if (!error) taskIdTagUpdated++;
+      .eq('user_id', userId)
+      .in('log_id', logIds);
+    if (!error) taskIdTagUpdated += logIds.length;
   }
 
   return NextResponse.json({

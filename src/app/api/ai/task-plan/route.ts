@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
 import { getTodayKST } from '@/lib/utils/date';
 import { classifyLogsAsTask } from '@/lib/ai/gemini';
+import { normalizeProject } from '@/lib/task-from-log';
 import { NextResponse } from 'next/server';
 
 /**
@@ -55,14 +56,13 @@ export async function POST(req: Request) {
   try {
     result = await classifyLogsAsTask({
       logs: logsToClassify.map((l) => {
-        const p = (l as { project?: { name: string } | { name: string }[] | null }).project;
-        const project = Array.isArray(p) ? (p[0] ?? null) : (p ?? null);
+        const n = normalizeProject(l as { project?: unknown; log_id: string; log_date: string; log_type: string; content: string | null });
         return {
-          log_id: l.log_id,
-          log_date: l.log_date,
-          log_type: l.log_type,
-          content: l.content ?? '',
-          project,
+          log_id: n.log_id,
+          log_date: n.log_date,
+          log_type: n.log_type,
+          content: n.content ?? '',
+          project: n.project,
         };
       }),
     });
@@ -74,21 +74,30 @@ export async function POST(req: Request) {
   }
 
   const logIdToIsTask = new Map((result.results ?? []).map((r) => [r.logId, r.isTask]));
-  let classified = 0;
-
+  const logIdsNoTaskTrue: string[] = [];
+  const logIdsNoTaskFalse: string[] = [];
   for (const log of logsToClassify) {
     const isTask = logIdToIsTask.get(log.log_id);
     if (isTask === undefined) continue;
-
-    const noTaskNeeded = !isTask;
-    const { error } = await supabase
-      .from('logs')
-      .update({ no_task_needed: noTaskNeeded })
-      .eq('log_id', log.log_id)
-      .eq('user_id', userId);
-
-    if (!error) classified++;
+    if (isTask) logIdsNoTaskFalse.push(log.log_id);
+    else logIdsNoTaskTrue.push(log.log_id);
   }
 
+  if (logIdsNoTaskTrue.length > 0) {
+    await supabase
+      .from('logs')
+      .update({ no_task_needed: true })
+      .eq('user_id', userId)
+      .in('log_id', logIdsNoTaskTrue);
+  }
+  if (logIdsNoTaskFalse.length > 0) {
+    await supabase
+      .from('logs')
+      .update({ no_task_needed: false })
+      .eq('user_id', userId)
+      .in('log_id', logIdsNoTaskFalse);
+  }
+
+  const classified = logIdsNoTaskTrue.length + logIdsNoTaskFalse.length;
   return NextResponse.json({ classified, total: logsToClassify.length });
 }

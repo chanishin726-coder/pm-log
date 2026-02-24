@@ -24,26 +24,19 @@ function getGenAI(): GoogleGenerativeAI {
 /** AI가 반환한 JSON이 끝 쉼표·빈 요소·마크다운 등으로 깨진 경우 복구 후 파싱 */
 function safeParseJson<T>(raw: string): T {
   let s = raw.trim();
-  // 마크다운 코드 블록 제거
   const codeMatch = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeMatch) s = codeMatch[1].trim();
   try {
     return JSON.parse(s) as T;
   } catch {
-    // 끝 쉼표 제거: ,] ,}
-    s = s.replace(/,(\s*[}\]])/g, '$1');
-  }
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    // 빈 배열 요소 제거: , , → ,
-    s = s.replace(/,(\s*,)+/g, ',');
-  }
-  try {
-    return JSON.parse(s) as T;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`JSON 파싱 실패. AI 응답이 잘렸거나 형식이 잘못되었을 수 있습니다. (${msg.slice(0, 120)})`);
+    // 끝 쉼표(,] ,})·빈 요소(,,) 한 번에 수정 후 재파싱 1회
+    s = s.replace(/,(\s*[}\]])/g, '$1').replace(/,(\s*,)+/g, ',');
+    try {
+      return JSON.parse(s) as T;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`JSON 파싱 실패. AI 응답이 잘렸거나 형식이 잘못되었을 수 있습니다. (${msg.slice(0, 120)})`);
+    }
   }
 }
 

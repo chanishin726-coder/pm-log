@@ -2,17 +2,20 @@ import { z } from 'zod';
 
 const projectCodeSchema = z.string().min(2).max(4).regex(/^[가-힣a-zA-Z0-9]+$/, '2~4자 코드 (한글/영문/숫자)');
 
+const projectStatusEnum = z.enum(['active', 'completed', 'hold']);
+
 export const createProjectSchema = z.object({
   name: z.string().min(1, '프로젝트명을 입력하세요'),
   code: projectCodeSchema,
   description: z.string().optional(),
+  status: projectStatusEnum.default('active').optional(),
 });
 
 export const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
   code: projectCodeSchema.optional(),
   description: z.string().optional(),
-  status: z.enum(['active', 'completed', 'hold']).optional(),
+  status: projectStatusEnum.optional(),
 });
 
 export const createLogSchema = z.object({
