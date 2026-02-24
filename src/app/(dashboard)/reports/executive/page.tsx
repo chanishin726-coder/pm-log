@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO, subDays } from 'date-fns';
 import { getTodayKST } from '@/lib/utils/date';
@@ -17,6 +17,19 @@ export default function ExecutiveReportPage() {
   );
   const [endDate, setEndDate] = useState(() => getTodayKST());
   const [summary, setSummary] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const copySummary = async () => {
+    if (!summary) return;
+    try {
+      await navigator.clipboard.writeText(summary);
+      setCopied(true);
+      toast.success('클립보드에 복사되었습니다.');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('복사에 실패했습니다.');
+    }
+  };
 
   const { mutate: runSummarize, isPending } = useMutation({
     mutationFn: async () => {
@@ -76,8 +89,22 @@ export default function ExecutiveReportPage() {
       </div>
 
       {summary && (
-        <div className="border rounded-lg p-4 sm:p-6 bg-card whitespace-pre-wrap text-sm">
-          {summary}
+        <div className="space-y-2">
+          <div className="flex items-center justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={copySummary}
+              className="gap-1.5"
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? '복사됨' : '복사'}
+            </Button>
+          </div>
+          <pre className="border rounded-lg p-4 sm:p-6 bg-muted/50 text-sm whitespace-pre-wrap font-sans overflow-x-auto select-text cursor-text">
+            <code>{summary}</code>
+          </pre>
         </div>
       )}
     </div>
