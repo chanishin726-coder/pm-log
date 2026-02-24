@@ -40,9 +40,9 @@ function safeParseJson<T>(raw: string): T {
   }
 }
 
-// Gemini 모델 ID (Google AI 스튜디오). Gemini 2.5 Flash Lite 사용
-const MODEL_FLASH = process.env.GEMINI_MODEL_FLASH || 'gemini-2.5-flash-lite';
-const MODEL_PRO = process.env.GEMINI_MODEL_PRO || 'gemini-2.5-flash-lite';
+// Gemini 모델: 단순 분류/판단은 Lite, 파싱·요약·보고서·RAG는 Flash(품질)
+const MODEL_LITE = process.env.GEMINI_MODEL_LITE || 'gemini-2.5-flash-lite';
+const MODEL_FLASH = process.env.GEMINI_MODEL_FLASH || 'gemini-2.5-flash';
 
 export interface ParsedLog {
   projectCode: string | null;
@@ -56,7 +56,7 @@ export async function parseLog(
   rawInput: string,
   projects: Pick<Project, 'code' | 'name'>[]
 ): Promise<ParsedLog[]> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH }); // 품질: 오파싱 감소
   const prompt = PARSE_LOG_PROMPT(projects) + `\n\n입력: ${rawInput}`;
 
   const result = await model.generateContent(prompt);
@@ -88,7 +88,7 @@ export async function classifyLogsAsTask(data: {
     project?: { name: string } | null;
   }>;
 }): Promise<TaskClassifyResult> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_LITE }); // 단순 분류, 속도 우선
 
   const prompt = `${TASK_CLASSIFY_PROMPT}
 
@@ -147,7 +147,7 @@ export async function generateDailyReport(data: {
   previousReport?: string;
   targetDate: string;
 }): Promise<DailyReportResult> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_PRO });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH }); // 복잡한 reasoning, 보고서 품질
 
   const logsText = data.logs
     .map((l) => {
@@ -268,7 +268,7 @@ export async function detectRelation(
   suggestedTag?: string;
   relationshipType?: string;
 }> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_LITE }); // 단순 연관성 판단
 
   const prompt = RELATE_LOGS_PROMPT.replace('{project1}', log1.project?.name || '기타')
     .replace('{type1}', log1.log_type)
@@ -300,7 +300,7 @@ export async function answerQuery(data: {
   }>;
   tasks: unknown[];
 }): Promise<string> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_PRO });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH }); // 복잡한 reasoning, 보고서 품질
 
   const logsText = data.logs
     .map(
@@ -319,7 +319,7 @@ export async function answerQuery(data: {
 }
 
 export async function summarizeForExecutive(dailyReport: string): Promise<string> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH }); // 요약 품질
 
   const prompt = `${EXECUTIVE_SUMMARY_PROMPT}\n\n## 입력\n${dailyReport}`;
 
