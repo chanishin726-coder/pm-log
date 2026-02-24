@@ -56,7 +56,7 @@ export async function parseLog(
   rawInput: string,
   projects: Pick<Project, 'code' | 'name'>[]
 ): Promise<ParsedLog[]> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH }); // 품질: 오파싱 감소
+  const model = getGenAI().getGenerativeModel({ model: MODEL_LITE }); // 로그 입력 시 속도 우선
   const prompt = PARSE_LOG_PROMPT(projects) + `\n\n입력: ${rawInput}`;
 
   const result = await model.generateContent(prompt);
@@ -88,7 +88,7 @@ export async function classifyLogsAsTask(data: {
     project?: { name: string } | null;
   }>;
 }): Promise<TaskClassifyResult> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_LITE }); // 단순 분류, 속도 우선
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
 
   const prompt = `${TASK_CLASSIFY_PROMPT}
 
@@ -268,7 +268,7 @@ export async function detectRelation(
   suggestedTag?: string;
   relationshipType?: string;
 }> {
-  const model = getGenAI().getGenerativeModel({ model: MODEL_LITE }); // 단순 연관성 판단
+  const model = getGenAI().getGenerativeModel({ model: MODEL_FLASH });
 
   const prompt = RELATE_LOGS_PROMPT.replace('{project1}', log1.project?.name || '기타')
     .replace('{type1}', log1.log_type)
