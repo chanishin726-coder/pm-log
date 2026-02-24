@@ -192,7 +192,7 @@ export async function POST(req: Request) {
 
   const tasks = (taskLogs ?? [])
     .map((l) => {
-      const effectiveState = effectiveStateByLogId[l.log_id] ?? null;
+      const effectiveState = effectiveStateByLogId[l.log_id] ?? (l as { task_state?: string | null }).task_state ?? null;
       return {
         task_id_tag: l.task_id_tag ?? '',
         description: l.content ?? '',
@@ -257,17 +257,25 @@ export async function POST(req: Request) {
   for (const nt of newTasks) {
     const validLogIds = (nt.logIds ?? []).filter((id) => logIdsThisDay.has(id));
     if (validLogIds.length === 0) continue;
-    const firstLog = logs?.find((l) => l.log_id === validLogIds[0]);
-    const p = firstLog && (firstLog as { project?: { code?: string } | { code?: string }[] }).project;
-    const projectCode = (Array.isArray(p) ? p[0] : p)?.code ?? '기타';
-    const { data: tag } = await supabase.rpc('generate_task_id', {
-      p_project_code: projectCode,
-      p_date: targetDate,
-    });
-    const taskIdTag = (tag as string) ?? `#${projectCode}-${targetDate.replace(/-/g, '')}-99`;
-    allowedTaskIdTags.add(taskIdTag);
+    // 프로젝트별로 분리: 같은 프로젝트 로그만 한 태그로 묶고, 서로 다른 프로젝트는 각각 별도 태그 부여
+    const logIdsByProjectCode = new Map<string, string[]>();
     for (const logId of validLogIds) {
-      await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('log_id', logId).eq('user_id', userId).is('task_id_tag', null);
+      const log = logs?.find((l) => l.log_id === logId);
+      const p = log && (log as { project?: { code?: string } | { code?: string }[] }).project;
+      const projectCode = (Array.isArray(p) ? p[0] : p)?.code ?? '기타';
+      if (!logIdsByProjectCode.has(projectCode)) logIdsByProjectCode.set(projectCode, []);
+      logIdsByProjectCode.get(projectCode)!.push(logId);
+    }
+    for (const [projectCode, logIds] of logIdsByProjectCode) {
+      const { data: tag } = await supabase.rpc('generate_task_id', {
+        p_project_code: projectCode,
+        p_date: targetDate,
+      });
+      const taskIdTag = (tag as string) ?? `#${projectCode}-${targetDate.replace(/-/g, '')}-99`;
+      allowedTaskIdTags.add(taskIdTag);
+      for (const logId of logIds) {
+        await supabase.from('logs').update({ task_id_tag: taskIdTag, no_task_needed: false }).eq('log_id', logId).eq('user_id', userId).is('task_id_tag', null);
+      }
     }
   }
 
@@ -301,9 +309,10 @@ export async function POST(req: Request) {
 
   const section1LogIds = new Set((taskLogs ?? []).map((l) => l.log_id));
   const excludeFromSection3 = new Set([...section1LogIds, ...doneLogIds]);
-  const logsForSection3 = (logsForSection3Raw ?? []).filter(
+  const logsForSection3Filtered = (logsForSection3Raw ?? []).filter(
     (l) => !excludeFromSection3.has((l as { log_id: string }).log_id)
   );
+  const logsForSection3 = normalizeProject(logsForSection3Filtered as { project?: unknown }[]);
   const section3Text = formatSection3Logs(logsForSection3 as unknown as LogForSection3[]);
   let completedItems: CompletedItem[] = [];
   if (doneLogIds.length > 0) {
@@ -321,7 +330,14 @@ export async function POST(req: Request) {
       }));
   }
 
-  const section12 = buildReportSection12((tasks || []) as TaskForSection1[]);
+  // Section 1: task_id_tag 중복 제거(동일 태그 여러 로그 시 한 번만 표시)
+  const seenTags = new Set<string>();
+  const tasksDeduped = (tasks || []).filter((t) => {
+    if (seenTags.has(t.task_id_tag)) return false;
+    seenTags.add(t.task_id_tag);
+    return true;
+  });
+  const section12 = buildReportSection12(tasksDeduped as TaskForSection1[]);
   const section4Text = buildReportSection4(completedItems);
   const reportContentFinal = `${section12}\n\n3. 일지 및 소통 이력\n${section3Text}\n\n4. 완료항목\n${section4Text}`;
 

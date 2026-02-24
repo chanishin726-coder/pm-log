@@ -110,9 +110,24 @@ export async function PUT(
 
   const newState = update.task_state as string | undefined;
   if (newState !== undefined && previousTaskState !== newState && newState != null) {
+    const now = new Date().toISOString();
+    const { data: openRow } = await supabase
+      .from('task_state_history')
+      .select('task_state_history_id')
+      .eq('log_id', id)
+      .is('valid_to', null)
+      .maybeSingle();
+    if (openRow?.task_state_history_id) {
+      await supabase
+        .from('task_state_history')
+        .update({ valid_to: now })
+        .eq('task_state_history_id', (openRow as { task_state_history_id: string }).task_state_history_id);
+    }
     await supabase.from('task_state_history').insert({
       log_id: id,
       task_state: newState,
+      valid_from: now,
+      valid_to: null,
     });
   }
 
