@@ -40,9 +40,9 @@ function safeParseJson<T>(raw: string): T {
   }
 }
 
-// Gemini 모델: 단순 분류/판단은 Lite, 파싱·요약·보고서·RAG는 Flash(품질)
+// Gemini 모델: 전부 flash-lite (속도 우선). env로 개별 변경 가능
 const MODEL_LITE = process.env.GEMINI_MODEL_LITE || 'gemini-2.5-flash-lite';
-const MODEL_FLASH = process.env.GEMINI_MODEL_FLASH || 'gemini-2.5-flash';
+const MODEL_FLASH = process.env.GEMINI_MODEL_FLASH || 'gemini-2.5-flash-lite';
 
 export interface ParsedLog {
   projectCode: string | null;
