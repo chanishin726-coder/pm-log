@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { QuickInput } from '@/components/logs/QuickInput';
@@ -11,7 +13,7 @@ import { NO_PROJECT_FILTER_VALUE, NO_PROJECT_LABEL } from '@/lib/utils';
 import { getTaskState, getTaskStateLabel } from '@/lib/task-state';
 import type { Log } from '@/types/database';
 
-const LOGS_PAGE_SIZE = 50;
+const LOGS_PAGE_SIZE = 15;
 
 export default function LogsPage() {
   const [projectId, setProjectId] = useState('');
@@ -162,9 +164,18 @@ export default function LogsPage() {
               const logWithState = log as Log & { task_state?: string | null };
               const hasTask = logWithState.task_state != null || log.task_id_tag != null;
               const taskState = hasTask ? getTaskState(logWithState) : null;
+              const copyText = log.source ? `${log.source}: ${log.content}` : log.content;
+              const handleCopy = (e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigator.clipboard.writeText(copyText).then(
+                  () => toast.success('복사되었습니다'),
+                  () => toast.error('복사 실패')
+                );
+              };
               return (
-                <li key={log.log_id} className="p-3 sm:p-4 hover:bg-muted/50 active:bg-muted/70 min-h-[52px] flex items-center">
-                  <Link href={`/logs/${log.log_id}`} className="block w-full">
+                <li key={log.log_id} className="group relative p-3 sm:p-4 hover:bg-muted/50 active:bg-muted/70 min-h-[52px] flex items-center">
+                  <Link href={`/logs/${log.log_id}`} className="block w-full pr-10 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-muted-foreground text-sm">{log.log_date}</span>
                       <Badge variant="secondary" className="font-mono text-xs">
@@ -188,6 +199,15 @@ export default function LogsPage() {
                       {log.content}
                     </p>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-opacity"
+                    title="source: content 복사"
+                    aria-label="복사"
+                  >
+                    <Copy className="h-4 w-4 text-muted-foreground" />
+                  </button>
                 </li>
               );
             })}
