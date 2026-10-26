@@ -3,7 +3,7 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
 import { z } from 'zod';
 import { getSupabasePublicEnv } from '@/lib/env';
 import { generateEmbedding } from '@/lib/ai/gemini';
-import { createLogsFromRaw } from '@/lib/services/logs';
+import { createLogsFromRaw, createLogsStructured } from '@/lib/services/logs';
 import { updateTaskState } from '@/lib/services/tasks';
 import { normalizeProject } from '@/lib/task-from-log';
 import { getTodayKST } from '@/lib/utils/date';
@@ -222,7 +222,8 @@ export function createPmLogMcpServer(userId: string) {
     {
       title: '로그 추가',
       description:
-        '원문을 앱과 동일한 AI 분류(프로젝트·유형·카테고리·출처·태그)로 파싱해 저장합니다. 한 원문에서 여러 건이 생길 수 있습니다. ' +
+        '원문을 앱과 동일한 Gemini AI 분류로 파싱해 저장합니다. 한 원문에서 여러 건이 생길 수 있습니다. ' +
+        '이미 분류를 마친 로그라면 add_logs_structured를 쓰세요(AI 비용 없음, 날짜 지정 가능). ' +
         '앱 입력 형식 그대로 넣으세요 (예: "서센 김과장: 우수관 실리콘 임시조치 완료 #서센6020905"). 저장 전에 사용자에게 내용을 확인받으세요.',
       inputSchema: {
         raw_input: z.string().min(1).max(5000).describe('로그 원문'),
@@ -254,6 +255,73 @@ export function createPmLogMcpServer(userId: string) {
       try {
         const { data, previousState } = await updateTaskState(supabase, userId, args.log_id, args.state);
         return ok({ previous: previousState, current: args.state, log: compactLog(data as LogRow) });
+      } catch (e) {
+        return fail(errMsg(e));
+      }
+    }
+  );
+
+  server.registerTool(
+    'list_categories',
+    {
+      title: '카테고리 코드표',
+      description: '로그 분류에 쓰는 업무영역 카테고리 코드 전체(코드·이름·업무영역)를 반환합니다. add_logs_structured의 category_codes는 여기 있는 코드만 쓸 수 있습니다.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    async () => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('code, name, parent_group')
+        .order('code');
+      if (error) return fail(error.message);
+      return ok(data);
+    }
+  );
+
+  server.registerTool(
+    'add_logs_structured',
+    {
+      title: '분류 완료 로그 저장',
+      description:
+        '분류가 끝난 로그 여러 건을 AI 파싱 없이 그대로 저장합니다. ' +
+        `유형: ${LOG_TYPE_GUIDE}. ` +
+        'project_code는 list_projects, category_codes는 list_categories의 값만 사용. ' +
+        '코드·날짜가 하나라도 틀리면 전체를 저장하지 않고 오류를 돌려줍니다. 같은 날짜·같은 내용은 중복으로 보고 건너뜁니다. ' +
+        '반드시 저장 전에 사용자에게 표로 보여주고 확인을 받으세요.',
+      inputSchema: {
+        logs: z
+          .array(
+            z.object({
+              log_date: z.string().describe('업무가 일어난 날짜 YYYY-MM-DD (카톡이면 메시지 날짜)'),
+              project_code: z.string().nullable().describe('프로젝트 코드. 해당 없으면 null'),
+              log_type: z.enum(['F', 'T', 'W', 'I']),
+              category_codes: z.array(z.string()).max(4).default([]),
+              source: z
+                .string()
+                .nullable()
+                .default(null)
+                .describe('상대방/출처. "업체명 이름 직함" 형식 (예: 지엠방재 박헌정 차장). F=보낸 사람, T=받은 사람'),
+              content: z.string().min(1).max(300).describe('정제된 내용. 상대방 이름은 빼고 내용만, 80자 내외'),
+              task_tag: z.string().nullable().default(null).describe('기존 할일 태그에 이어지는 경우만 (예: #서센6020905)'),
+              keywords: z.array(z.string()).max(5).default([]),
+              raw_excerpt: z.string().max(2000).nullable().default(null).describe('근거가 된 원문 발췌 (선택)'),
+            })
+          )
+          .min(1)
+          .max(50),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async (args) => {
+      try {
+        const result = await createLogsStructured(supabase, userId, args.logs);
+        return ok({
+          created: result.created.length,
+          skipped_duplicates: result.skipped,
+          embedding: result.embedding,
+          logs: result.created.map((r) => compactLog(r as LogRow)),
+        });
       } catch (e) {
         return fail(errMsg(e));
       }
