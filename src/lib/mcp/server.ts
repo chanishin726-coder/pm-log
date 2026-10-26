@@ -3,7 +3,8 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
 import { z } from 'zod';
 import { getSupabasePublicEnv } from '@/lib/env';
 import { generateEmbedding } from '@/lib/ai/gemini';
-import { createLogsFromRaw, createLogsStructured } from '@/lib/services/logs';
+import { waitUntil } from '@vercel/functions';
+import { createLogsFromRaw, createLogsStructured, embedLogs } from '@/lib/services/logs';
 import { updateTaskState } from '@/lib/services/tasks';
 import { normalizeProject } from '@/lib/task-from-log';
 import { getTodayKST } from '@/lib/utils/date';
@@ -262,6 +263,95 @@ export function createPmLogMcpServer(userId: string) {
   );
 
   server.registerTool(
+    'prepare_log_context',
+    {
+      title: '로그 입력 준비 정보',
+      description:
+        '로그 정리·저장 전에 필요한 기준 정보를 한 번에 반환합니다: 프로젝트 코드, 카테고리 코드표, ' +
+        '지정 기간의 기존 로그(중복 확인용), 미완료 할일(태그 연결·완료 제안용). ' +
+        'list_projects·list_categories·search_logs·list_tasks를 따로 부르지 말고 이것 하나를 쓰세요.',
+      inputSchema: {
+        start_date: z.string().optional().describe('원문 날짜 범위 시작 YYYY-MM-DD (기본: 7일 전)'),
+        end_date: z.string().optional().describe('원문 날짜 범위 끝 YYYY-MM-DD (기본: 오늘)'),
+        project_codes: z.array(z.string()).optional().describe('관련 프로젝트 코드. 비우면 전체'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      try {
+        const today = getTodayKST();
+        const start =
+          args.start_date ??
+          new Date(Date.parse(today) - 7 * 86400000).toISOString().slice(0, 10);
+        const end = args.end_date ?? today;
+
+        const [projRes, catRes] = await Promise.all([
+          supabase.from('projects').select('projects_id, code, name').eq('user_id', userId).order('code'),
+          supabase.from('categories').select('code, name, parent_group').order('code'),
+        ]);
+        if (projRes.error) return fail(projRes.error.message);
+        if (catRes.error) return fail(catRes.error.message);
+        const projects = projRes.data ?? [];
+        const ids = (args.project_codes ?? [])
+          .map((c) => projects.find((p) => p.code === c)?.projects_id)
+          .filter((v): v is string => !!v);
+
+        let logsQ = supabase
+          .from('logs')
+          .select(LOG_COLUMNS)
+          .eq('user_id', userId)
+          .gte('log_date', start)
+          .lte('log_date', end)
+          .order('log_date', { ascending: false })
+          .limit(150);
+        let tasksQ = supabase
+          .from('logs')
+          .select(LOG_COLUMNS)
+          .eq('user_id', userId)
+          .not('project_id', 'is', null)
+          .or('task_state.not.is.null,task_id_tag.not.is.null,no_task_needed.eq.false')
+          .order('created_at', { ascending: false })
+          .limit(300);
+        if (ids.length) {
+          logsQ = logsQ.in('project_id', ids);
+          tasksQ = tasksQ.in('project_id', ids);
+        }
+        const [logsRes, tasksRes] = await Promise.all([logsQ, tasksQ]);
+        if (logsRes.error) return fail(logsRes.error.message);
+        if (tasksRes.error) return fail(tasksRes.error.message);
+
+        // 카테고리는 토큰 절약을 위해 업무영역별 "코드 이름" 한 줄로 압축
+        const catGroups: Record<string, string[]> = {};
+        for (const c of catRes.data ?? []) {
+          (catGroups[c.parent_group as string] ??= []).push(`${c.code} ${c.name}`);
+        }
+
+        const openTasks = (tasksRes.data ?? [])
+          .filter((r) => (r as LogRow).task_state !== 'done')
+          .slice(0, 150)
+          .map((r) => {
+            const c = compactLog(r as LogRow);
+            return { log_id: c.log_id, date: c.date, project: c.project, source: c.source, content: c.content, tag: c.tag, state: c.state };
+          });
+
+        return ok({
+          today,
+          range: { start, end },
+          projects: projects.map((p) => `${p.code}=${p.name}`),
+          categories: Object.fromEntries(Object.entries(catGroups).map(([g, list]) => [g, list.join(', ')])),
+          existing_logs: (logsRes.data ?? []).map((r) => {
+            const c = compactLog(r as LogRow);
+            return { date: c.date, project: c.project, type: c.type, source: c.source, content: c.content };
+          }),
+          open_tasks: openTasks,
+        });
+      } catch (e) {
+        return fail(errMsg(e));
+      }
+    }
+  );
+
+  server.registerTool(
     'list_categories',
     {
       title: '카테고리 코드표',
@@ -316,10 +406,18 @@ export function createPmLogMcpServer(userId: string) {
     async (args) => {
       try {
         const result = await createLogsStructured(supabase, userId, args.logs);
+        // 의미 검색용 임베딩은 응답 후 백그라운드에서 생성 (실패해도 저장은 유지)
+        if (result.created.length) {
+          waitUntil(
+            embedLogs(
+              supabase,
+              result.created.map((l) => ({ log_id: l.log_id as string, content: l.content as string }))
+            ).catch((e) => console.warn('[add_logs_structured] embedding failed', e))
+          );
+        }
         return ok({
           created: result.created.length,
           skipped_duplicates: result.skipped,
-          embedding: result.embedding,
           logs: result.created.map((r) => compactLog(r as LogRow)),
         });
       } catch (e) {

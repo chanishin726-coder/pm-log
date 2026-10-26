@@ -119,6 +119,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * 이미 분류가 끝난 로그(Claude 등)를 AI 파싱 없이 저장한다.
  * - 프로젝트·카테고리 코드, 유형, 날짜를 서버에서 검증. 하나라도 틀리면 아무것도 저장하지 않음.
  * - 같은 날짜·같은 내용의 로그가 이미 있으면 중복으로 보고 건너뜀.
+ * - 임베딩은 만들지 않음. 호출 측에서 embedLogs()로 처리.
  */
 export async function createLogsStructured(
   supabase: SupabaseClient,
@@ -184,16 +185,11 @@ export async function createLogsStructured(
     });
   });
 
-  if (!rows.length) return { created: [], skipped, embedding: { ok: 0, failed: 0 } };
+  if (!rows.length) return { created: [], skipped };
 
   const { data: logs, error } = await supabase.from('logs').insert(rows).select();
   if (error) throw new ServiceError(error.message, 500);
   const created = Array.isArray(logs) ? logs : [];
-
-  const embedding = await embedLogs(
-    supabase,
-    created.map((l) => ({ log_id: l.log_id as string, content: l.content as string }))
-  );
-
-  return { created, skipped, embedding };
+  // 임베딩은 호출 측에서 처리(응답 지연 방지를 위해 백그라운드 실행 권장): embedLogs()
+  return { created, skipped };
 }
