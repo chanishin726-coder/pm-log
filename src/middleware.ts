@@ -9,6 +9,11 @@ export async function middleware(request: NextRequest) {
     request: { headers: request.headers },
   });
 
+  // MCP 커넥터: 쿠키 로그인 대신 /api/mcp/<MCP_SECRET> 경로 비밀값으로 route에서 직접 인증
+  if (request.nextUrl.pathname.startsWith('/api/mcp/')) {
+    return response;
+  }
+
   // 임시: 인증 우회 모드면 로그인/리다이렉트 없이 통과
   if (AUTH_BYPASS) {
     return response;

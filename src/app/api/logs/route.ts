@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getEffectiveUserId, getAuthBypassConfigError } from '@/lib/auth';
-import { parseLog } from '@/lib/ai/gemini';
-import { parseLogContent, NO_PROJECT_FILTER_VALUE } from '@/lib/utils';
+import { NO_PROJECT_FILTER_VALUE } from '@/lib/utils';
+import { createLogsFromRaw, ServiceError } from '@/lib/services/logs';
 import { createLogSchema } from '@/lib/validators/schemas';
 import { NextResponse } from 'next/server';
 
@@ -28,85 +28,16 @@ export async function POST(req: Request) {
   }
   const { rawInput } = parsedBody.data;
 
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('projects_id, name, code')
-    .eq('user_id', userId);
-
-  let items;
   try {
-    items = await parseLog(rawInput, projects || []);
+    const logs = await createLogsFromRaw(supabase, userId, rawInput);
+    return NextResponse.json(logs);
   } catch (e) {
+    const status = e instanceof ServiceError ? e.status : 500;
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : 'AI 파싱 실패' },
-      { status: 500 }
+      { error: e instanceof Error ? e.message : '로그 저장 실패' },
+      { status }
     );
   }
-
-  const rows: Array<{
-    user_id: string;
-    project_id: string | null;
-    raw_input: string;
-    content: string;
-    log_type: string;
-    category_codes: string[];
-    keywords: string[] | null;
-    source: string | null;
-    task_id_tag: string | null;
-  }> = [];
-
-  const fromRawTag = rawInput?.trim() ? parseLogContent(rawInput.trim()).task_id_tag : null;
-
-  for (const item of items) {
-    let projectId: string | null = null;
-    if (item.projectCode && projects?.length) {
-      const found = projects.find((p) => p.code === item.projectCode);
-      if (!found) {
-        return NextResponse.json(
-          { error: `프로젝트 코드 '${item.projectCode}'를 찾을 수 없습니다.` },
-          { status: 400 }
-        );
-      }
-      projectId = found.projects_id;
-    }
-
-    const parsedContent = parseLogContent(item.content);
-    const tag = parsedContent.task_id_tag ?? fromRawTag;
-    const codes = Array.isArray(item.categoryCodes) && item.categoryCodes.length > 0 ? item.categoryCodes : [];
-
-    rows.push({
-      user_id: userId,
-      project_id: projectId,
-      raw_input: rawInput,
-      content: parsedContent.content,
-      log_type: item.logType,
-      category_codes: codes,
-      keywords: item.extractedKeywords ?? null,
-      source: parsedContent.source ?? null,
-      task_id_tag: tag ?? null,
-    });
-  }
-
-  const { data: logs, error } = await supabase.from('logs').insert(rows).select();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || '';
-  if (baseUrl && Array.isArray(logs)) {
-    for (const log of logs) {
-      fetch(`${baseUrl}/api/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ logId: log.log_id }),
-      }).catch((err) => {
-        console.warn('[POST /api/logs] Embedding request failed for log', log.log_id, err);
-      });
-    }
-  }
-
-  return NextResponse.json(Array.isArray(logs) ? logs : []);
 }
 
 export async function GET(req: Request) {
